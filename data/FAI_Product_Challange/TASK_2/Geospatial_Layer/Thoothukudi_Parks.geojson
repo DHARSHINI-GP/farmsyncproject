@@ -1,0 +1,25 @@
+{
+"type": "FeatureCollection",
+"name": "Thoothukudi_Parks",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{"type":"Feature","properties":{"park_name":"Silanatham","latitude":8.85282311,"longitude":78.08264981000001},"geometry":{"type":"Point","coordinates":[78.08264981,8.85282311]}},
+{"type":"Feature","properties":{"park_name":"E. Velayuthapuram","latitude":9.04971311,"longitude":78.28411634},"geometry":{"type":"Point","coordinates":[78.28411634,9.04971311]}},
+{"type":"Feature","properties":{"park_name":"Vembur","latitude":9.3017094,"longitude":78.08695336},"geometry":{"type":"Point","coordinates":[78.08695336,9.3017094]}},
+{"type":"Feature","properties":{"park_name":"Therkuveerapandiyapuram","latitude":8.84171133,"longitude":78.07199446},"geometry":{"type":"Point","coordinates":[78.07199446,8.84171133]}},
+{"type":"Feature","properties":{"park_name":"Vadakku Silukanpatti","latitude":8.82230602,"longitude":78.04901643},"geometry":{"type":"Point","coordinates":[78.04901643,8.82230602]}},
+{"type":"Feature","properties":{"park_name":"Allikulam","latitude":8.78633581,"longitude":78.01564761},"geometry":{"type":"Point","coordinates":[78.01564761,8.78633581]}},
+{"type":"Feature","properties":{"park_name":"Ottapidaram","latitude":8.89549881,"longitude":78.06476541000001},"geometry":{"type":"Point","coordinates":[78.06476541,8.89549881]}},
+{"type":"Feature","properties":{"park_name":"Industrial Poromboke Land","latitude":8.77456993,"longitude":78.12341035},"geometry":{"type":"Point","coordinates":[78.12341035,8.77456993]}},
+{"type":"Feature","properties":{"park_name":"Mullakadu - Palayakayal","latitude":8.727454,"longitude":78.131209},"geometry":{"type":"Point","coordinates":[78.131209,8.727454]}},
+{"type":"Feature","properties":{"park_name":"Ezhuvaraimukki","latitude":8.521789,"longitude":77.965343},"geometry":{"type":"Point","coordinates":[77.965343,8.521789]}},
+{"type":"Feature","properties":{"park_name":"Mudivaithanandal","latitude":8.734417,"longitude":77.965883},"geometry":{"type":"Point","coordinates":[77.965883,8.734417]}},
+{"type":"Feature","properties":{"park_name":"Silanatham Expn.","latitude":8.872519,"longitude":78.067006},"geometry":{"type":"Point","coordinates":[78.067006,8.872519]}},
+{"type":"Feature","properties":{"park_name":"Umarikottai","latitude":8.802078,"longitude":77.997273},"geometry":{"type":"Point","coordinates":[77.997273,8.802078]}},
+{"type":"Feature","properties":{"park_name":"Mullakadu Scheme","latitude":8.744725,"longitude":78.148371},"geometry":{"type":"Point","coordinates":[78.148371,8.744725]}},
+{"type":"Feature","properties":{"park_name":"Vaippar","latitude":9.02507054,"longitude":78.28701015},"geometry":{"type":"Point","coordinates":[78.28701015,9.02507054]}},
+{"type":"Feature","properties":{"park_name":"Thoothukudi  (Left out land)","latitude":8.83617576,"longitude":78.07412469},"geometry":{"type":"Point","coordinates":[78.07412469,8.83617576]}},
+{"type":"Feature","properties":{"park_name":"Thoothukudi Phase-I ","latitude":8.82759075,"longitude":78.080259},"geometry":{"type":"Point","coordinates":[78.080259,8.82759075]}},
+{"type":"Feature","properties":{"park_name":"Thoothukudi approach Road","latitude":8.828715,"longitude":78.092462},"geometry":{"type":"Point","coordinates":[78.092462,8.828715]}}
+]
+}

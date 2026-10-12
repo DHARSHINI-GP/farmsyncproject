@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FARMSYNC | Enterprise Geospatial AI Platform</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Marked for Markdown Rendering in AI responses -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#F0F9F4',
+              100: '#DCF2E4',
+              500: '#27AE60',
+              600: '#1E8E4D',
+              700: '#166E3A',
+              800: '#11522B',
+              900: '#0B381C',
+            },
+            navy: {
+              800: '#1E293B',
+              900: '#0F172A',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #EBF0F5;
+      color: #1E293B;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 5px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #F8FAFC;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+    .leaflet-popup-content-wrapper {
+      border-radius: 14px;
+      padding: 6px;
+      box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(14px);
+    }
+    .parcel-tooltip {
+      background: #0F172A;
+      border: 1px solid #334155;
+      color: #F8FAFC;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .pulse-glow {
+      box-shadow: 0 0 15px rgba(39, 174, 96, 0.5);
+    }
+  </style>
+</head>
+<body class="min-h-screen p-2 md:p-5 flex items-center justify-center">
+
+  <!-- Main Enterprise Application Shell -->
+  <div class="w-full max-w-[1760px] h-[95vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-slate-200/80">
+    
+    <!-- TOP NAVIGATION BAR -->
+    <header class="h-16 border-b border-slate-100 px-6 flex items-center justify-between bg-white z-20 shrink-0">
+      <div class="flex items-center space-x-8">
+        <!-- Logo -->
+        <div class="flex items-center space-x-2.5 cursor-pointer" onclick="location.reload()">
+          <div class="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+            <i data-lucide="compass" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="font-extrabold text-lg tracking-tight text-slate-900 leading-none">FARMSYNC</div>
+            <div class="text-[10px] text-brand-600 font-semibold tracking-wider uppercase leading-none mt-0.5">Geospatial AI Platform</div>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="hidden lg:flex items-center space-x-1">
+          <button class="px-4 py-1.5 text-xs font-semibold rounded-full bg-slate-900 text-white shadow-sm transition">Geospatial Explorer</button>
+          <button onclick="switchMode('audit')" class="px-4 py-1.5 text-xs font-medium rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition">Cadastral Audit (396 Parcels)</button>
+          <button onclick="switchMode('ai')" class="px-4 py-1.5 text-xs font-medium rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition">AI Copilot Reasoning</button>
+          <button onclick="switchMode('telemetry')" class="px-4 py-1.5 text-xs font-medium rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition">Router Telemetry</button>
+        </nav>
+      </div>
+
+      <!-- Right Header Actions -->
+      <div class="flex items-center space-x-3">
+        <!-- Live AI / Bedrock Status Pill (Clickable for Credentials Setup) -->
+        <button onclick="openAwsModal()" id="bedrockStatusBtn" class="flex items-center space-x-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-200 text-xs font-medium transition">
+          <span id="bedrockStatusDot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="bedrockStatusText">AI Model: Enterprise CoT (Online)</span>
+          <span class="text-slate-400">·</span>
+          <span class="font-semibold text-emerald-900">ap-south-1</span>
+          <i data-lucide="settings" class="w-3 h-3 text-emerald-600"></i>
+        </button>
+
+        <!-- Amazon Location Service Status Pill -->
+        <div class="hidden xl:flex items-center space-x-1.5 bg-blue-50 text-blue-800 px-3 py-1.5 rounded-full border border-blue-200 text-xs font-medium">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-blue-600"></i>
+          <span>Amazon Location Service</span>
+          <span class="text-slate-300">·</span>
+          <span class="font-bold text-blue-900">ap-south-1</span>
+        </div>
+
+        <!-- Notification Bell -->
+        <button class="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition relative">
+          <i data-lucide="bell" class="w-4 h-4"></i>
+          <span class="absolute top-2 right-2 w-2 h-2 bg-brand-500 rounded-full"></span>
+        </button>
+
+        <!-- Profile Avatar & Team -->
+        <div class="flex items-center space-x-2.5 pl-2 border-l border-slate-200">
+          <div class="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-xs ring-2 ring-brand-500/30">
+            PR
+          </div>
+          <div class="hidden md:block text-left">
+            <div class="text-xs font-bold text-slate-900 leading-tight">Team PRIME</div>
+            <div class="text-[10px] text-slate-400 font-mono">TCPC-2026-00071</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN BODY: SPLIT VIEW -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+      <!-- LEFT SIDEBAR: MASTER CONTROLS & PARCEL TABLE -->
+      <aside class="w-full md:w-[460px] lg:w-[480px] border-r border-slate-200/80 bg-white flex flex-col shrink-0 z-10">
+        
+        <!-- Sidebar Top Header & Primary Action -->
+        <div class="p-4 border-b border-slate-100">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h2 class="text-base font-bold text-slate-900 tracking-tight flex items-center space-x-1.5">
+                <span>Cadastral Parcels</span>
+                <span id="loadedParcelsCountBadge" class="bg-brand-50 text-brand-700 text-[11px] px-2 py-0.5 rounded-full font-bold">396 Live</span>
+              </h2>
+              <p class="text-[11px] text-slate-400">Keelathattaparai Village · Thoothukudi</p>
+            </div>
+            <button onclick="triggerVerification()" id="runBtn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-brand-500/20 transition active:scale-95">
+              <i data-lucide="play" class="w-3.5 h-3.5 fill-white"></i>
+              <span>Verify Active</span>
+            </button>
+          </div>
+
+          <!-- Segmented Filter Switcher -->
+          <div class="bg-slate-100 p-1 rounded-xl flex items-center text-xs font-semibold mb-2.5">
+            <button onclick="filterTable('all')" id="tabAll" class="flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition">All (<span id="totalCount">396</span>)</button>
+            <button onclick="filterTable('flagged')" id="tabFlagged" class="flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition">Discrepant (<span id="flaggedCount">2</span>)</button>
+            <button onclick="filterTable('redteam')" id="tabRedTeam" class="flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition">Red-Team</button>
+          </div>
+
+          <!-- Search Bar -->
+          <div class="relative">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
+            <input type="text" id="searchInput" onkeyup="handleSearch()" placeholder="Search survey no (e.g. 384, 176, 381)..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition" />
+          </div>
+
+          <!-- Red-Team Simulation Drawer (Collapsible) -->
+          <div id="redTeamDrawer" class="hidden mt-2.5 p-2.5 bg-amber-50/80 border border-amber-200/60 rounded-xl text-xs">
+            <div class="font-bold text-amber-900 flex items-center space-x-1.5 mb-1.5">
+              <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-amber-600"></i>
+              <span>Red-Team Adversarial Toggles:</span>
+            </div>
+            <div class="space-y-1">
+              <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" id="simEscalate" class="rounded text-brand-600 focus:ring-brand-500">
+                <span class="text-slate-700 text-[11px]">Simulate Low-Confidence Photo (Teacher Escalation)</span>
+              </label>
+              <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" id="simConflict" class="rounded text-brand-600 focus:ring-brand-500">
+                <span class="text-slate-700 text-[11px]">Inject Legal Extent Discrepancy (Refuse-to-Invent)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Master Parcels Table -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar">
+          <div class="px-4 py-1.5 flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50/60 sticky top-0 z-10 backdrop-blur-xs">
+            <span class="w-2/5">Parcel / Survey</span>
+            <span class="w-1/4">Crop</span>
+            <span class="w-1/4 text-center">Audit Status</span>
+            <span class="w-8 text-right">View</span>
+          </div>
+
+          <div id="parcelListContainer" class="divide-y divide-slate-100">
+            <!-- Populated via JS -->
+            <div class="p-8 text-center text-slate-400 text-xs flex flex-col items-center">
+              <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-brand-600 mb-2"></i>
+              Loading 396 cadastral parcels...
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Status Bar -->
+        <div class="h-12 border-t border-slate-100 px-4 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50 shrink-0">
+          <div class="flex items-center space-x-1.5">
+            <span class="font-medium">Selected:</span>
+            <span id="activeSurveyBadge" class="font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded-md text-xs">Survey 384</span>
+          </div>
+          <span class="text-[11px] text-slate-400 font-mono">EPSG:32644 (UTM 44N)</span>
+        </div>
+      </aside>
+
+      <!-- RIGHT PANEL: FULL MAP CANVAS & AI COPILOT HUD -->
+      <main class="flex-1 relative flex flex-col bg-slate-100 overflow-hidden">
+        
+        <!-- The Interactive Leaflet Map Container -->
+        <div id="map" class="w-full h-full z-0"></div>
+
+        <!-- PROMINENT AI PROMPT BAR & COPILOT (Matches Reference Image 3) -->
+        <div class="absolute top-4 left-20 right-4 z-10 max-w-4xl mx-auto flex flex-col space-y-2 pointer-events-none">
+          
+          <!-- AI Input Box -->
+          <div class="glass-card p-2 rounded-2xl shadow-xl border border-white/80 pointer-events-auto flex items-center space-x-2">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white shrink-0 shadow-sm">
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+            </div>
+            <input 
+              type="text" 
+              id="aiQueryInput" 
+              onkeydown="if(event.key==='Enter') executeAiQuery()"
+              placeholder="Ask FARMSYNC AI (e.g. 'Inspect survey 384 and check crop health', 'Why is 176 flagged?', 'Check waterbody clearance')..." 
+              class="flex-1 bg-transparent border-0 px-2 text-xs md:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+            />
+            <button onclick="executeAiQuery()" id="aiSubmitBtn" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95 shrink-0">
+              <span>Ask AI</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <!-- Quick Suggestion Prompt Chips -->
+          <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar pointer-events-auto pl-1">
+            <button onclick="quickPrompt('Inspect Survey 384 and verify crop health')" class="glass-card hover:bg-white text-slate-700 px-3 py-1 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
+              <span class="text-brand-600">⚡</span>
+              <span>Inspect Survey 384</span>
+            </button>
+            <button onclick="quickPrompt('Audit Survey 176 for extent mismatch and legal conflict')" class="glass-card hover:bg-white text-slate-700 px-3 py-1 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
+              <span class="text-rose-500">⚡</span>
+              <span>Audit Survey 176 Conflict</span>
+            </button>
+            <button onclick="quickPrompt('Check environmental waterbody buffer clearance for Survey 382')" class="glass-card hover:bg-white text-slate-700 px-3 py-1 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
+              <span class="text-amber-500">⚡</span>
+              <span>Waterbody Buffer Check 382</span>
+            </button>
+            <button onclick="quickPrompt('Recommend TNAU fertilizer schedule for Sugarcane in Survey 387')" class="glass-card hover:bg-white text-slate-700 px-3 py-1 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
+              <span class="text-emerald-600">⚡</span>
+              <span>Sugarcane Advisory 387</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- FLOATING TOP-LEFT MAP CONTROLS -->
+        <div class="absolute top-4 left-4 z-10 flex flex-col space-y-1.5 glass-card p-1.5 rounded-2xl shadow-lg border border-white/80">
+          <button onclick="map.zoomIn()" class="w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-700 transition" title="Zoom In">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+          <button onclick="map.zoomOut()" class="w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-700 transition" title="Zoom Out">
+            <i data-lucide="minus" class="w-4 h-4"></i>
+          </button>
+          <div class="h-px bg-slate-200 my-0.5"></div>
+          <button onclick="centerActiveParcel()" class="w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-700 transition" title="Fit to Active Parcel">
+            <i data-lucide="crosshair" class="w-4 h-4"></i>
+          </button>
+          <button onclick="toggleCadastralLayer()" id="cadastralToggleBtn" class="w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-brand-600 transition" title="Toggle Cadastral Parcels Layer">
+            <i data-lucide="grid" class="w-4 h-4"></i>
+          </button>
+          <button onclick="toggleRoadsLayer()" id="roadsToggleBtn" class="w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-700 transition" title="Toggle Road Network Layer">
+            <i data-lucide="git-fork" class="w-4 h-4"></i>
+          </button>
+          <button onclick="toggleWaterLayer()" id="waterToggleBtn" class="w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-blue-600 transition" title="Toggle Waterbodies Layer">
+            <i data-lucide="waves" class="w-4 h-4"></i>
+          </button>
+          <button onclick="toggleSatelliteTile()" id="satelliteToggleBtn" class="w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-500 transition" title="Switch to Satellite Imagery">
+            <i data-lucide="layers" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- FLOATING BOTTOM MAP LEGEND -->
+        <div class="absolute bottom-4 left-6 z-10 glass-card px-4 py-2 rounded-full shadow-lg border border-white/70 flex items-center space-x-4 text-xs font-semibold text-slate-700">
+          <div class="flex items-center space-x-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            <span>Verified (394)</span>
+          </div>
+          <span class="text-slate-300">|</span>
+          <div class="flex items-center space-x-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+            <span>Caution (Survey 382)</span>
+          </div>
+          <span class="text-slate-300">|</span>
+          <div class="flex items-center space-x-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+            <span>Discrepancy (Survey 176)</span>
+          </div>
+          <span class="text-slate-300">|</span>
+          <div class="flex items-center space-x-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <span>Waterbodies</span>
+          </div>
+        </div>
+
+        <!-- FLOATING SLIDE-OVER INSPECTION DRAWER (Bottom Right) -->
+        <div id="detailDrawer" class="absolute bottom-4 right-4 w-[430px] max-h-[80vh] glass-card rounded-3xl shadow-2xl border border-white/80 flex flex-col overflow-hidden z-20 transition-all duration-300">
+          
+          <!-- Drawer Header -->
+          <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between bg-white/70">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-7 h-7 rounded-lg bg-brand-50 flex items-center justify-center text-brand-600">
+                <i data-lucide="file-check-2" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 id="drawerTitle" class="text-xs md:text-sm font-bold text-slate-900 leading-none">Survey 384 Inspection</h3>
+                <span id="drawerSubtitle" class="text-[10px] text-slate-400">10.35 Acres · Keelathattaparai</span>
+              </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+              <span id="drawerDecisionBadge" class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800">ACCEPT</span>
+              <button onclick="toggleDrawer()" class="w-7 h-7 rounded-lg hover:bg-slate-200/50 flex items-center justify-center text-slate-400 hover:text-slate-700 transition">
+                <i data-lucide="chevron-down" class="w-4 h-4" id="drawerChevron"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Drawer Body Content -->
+          <div id="drawerBody" class="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar text-xs">
+            
+            <!-- AI Copilot Live Response Box (Highlights dynamic AI generation) -->
+            <div id="aiResponseBox" class="bg-gradient-to-br from-brand-50/80 to-emerald-50/50 border border-brand-200/70 rounded-2xl p-3.5 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-900 flex items-center space-x-1.5">
+                  <i data-lucide="bot" class="w-4 h-4 text-brand-600"></i>
+                  <span id="aiModelBadgeText">AI Model Reasoning</span>
+                </span>
+                <span id="aiLatencyBadge" class="bg-brand-100 text-brand-800 font-mono text-[10px] px-2 py-0.5 rounded-md">274ms · ap-south-1</span>
+              </div>
+              
+              <!-- Markdown Content from AI Engine -->
+              <div id="aiAnswerContent" class="text-[11px] text-slate-800 leading-relaxed prose prose-xs max-w-none pt-1">
+                Click <b>Run Verification</b> or enter any query in the prompt bar above to trigger the live Multimodal AI Reasoning Model.
+              </div>
+
+              <!-- Collapsible Chain-of-Thought Steps -->
+              <details class="pt-1 border-t border-brand-200/40 text-[11px] cursor-pointer" open>
+                <summary class="font-bold text-brand-900 hover:text-brand-700 mb-1.5 flex items-center space-x-1">
+                  <span>Chain-of-Thought Reasoning Steps:</span>
+                </summary>
+                <div id="aiThoughtStepsList" class="space-y-1 pl-2 text-[10px] text-slate-600 font-mono">
+                  <div>1. Entity Extraction: Target parcel Survey 384</div>
+                  <div>2. PostGIS: Area 10.35 ac (UTM 44N)</div>
+                  <div>3. OCR Verification: Ownership match verified</div>
+                  <div>4. Multimodal Vision: Crop classification</div>
+                  <div>5. RAG Advisory: Package of practices</div>
+                  <div>6. Trust Synthesis: FTS = 0.884</div>
+                </div>
+              </details>
+            </div>
+
+            <!-- Real Field Photo Box -->
+            <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3">
+              <div class="flex items-center justify-between mb-2">
+                <span class="font-bold text-slate-800 flex items-center space-x-1.5">
+                  <i data-lucide="camera" class="w-3.5 h-3.5 text-brand-600"></i>
+                  <span>Field Ground Photograph</span>
+                </span>
+                <span id="photoBadge" class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md text-[10px]">Coconut · full_growth</span>
+              </div>
+              <div class="w-full h-32 bg-slate-200 rounded-xl overflow-hidden relative border border-slate-200">
+                <img id="fieldPhotoImg" src="/api/image/default" alt="Field Photo" class="w-full h-full object-cover">
+                <div class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-xs text-white px-2 py-0.5 rounded text-[10px] font-mono">
+                  GPS: 8.780888°N, 78.026997°E
+                </div>
+              </div>
+            </div>
+
+            <!-- Amazon Location Service Card -->
+            <div class="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 flex items-center space-x-1.5">
+                  <i data-lucide="map-pin" class="w-3.5 h-3.5 text-blue-600"></i>
+                  <span>Amazon Location Service</span>
+                </span>
+                <span id="locServiceSourceBadge" class="text-[9px] bg-blue-100 text-blue-800 font-mono px-2 py-0.5 rounded font-bold">AWS ap-south-1</span>
+              </div>
+
+              <!-- Reverse Geocoded Address -->
+              <div class="bg-white p-2.5 rounded-xl border border-slate-100 text-[11px] space-y-1">
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Administrative Revenue Address</div>
+                <div id="reverseAddressText" class="font-semibold text-slate-800 leading-tight">
+                  Survey No. 384, Keelathattaparai Revenue Village, Thoothukudi Taluk, Tamil Nadu - 628103
+                </div>
+                <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                  <span>Taluk: <b id="talukText" class="text-slate-700">Thoothukudi</b></span>
+                  <span>Geofence: <b id="geofenceStatusText" class="text-emerald-600">COMPLIANT</b></span>
+                </div>
+              </div>
+
+              <!-- Ag-Logistics Route Planner -->
+              <div class="bg-white p-2.5 rounded-xl border border-slate-100 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] text-slate-500 font-medium">Ag-Logistics Supply Route:</span>
+                  <span id="routeMetricBadge" class="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">6.3 km · 14 mins</span>
+                </div>
+                <button onclick="calculateAndDisplayRoute()" id="routeBtn" class="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-sm active:scale-95">
+                  <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
+                  <span>Plot Route from Vagaikulam Depot</span>
+                </button>
+                <div id="routeStepsDrawer" class="hidden text-[10px] text-slate-600 space-y-1 pt-1.5 border-t border-slate-100 font-mono">
+                  <!-- Steps injected via JS -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Deterministic GIS Metrics Box -->
+            <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 space-y-2">
+              <div class="font-bold text-slate-800 flex items-center justify-between">
+                <span class="flex items-center space-x-1.5">
+                  <i data-lucide="calculator" class="w-3.5 h-3.5 text-blue-600"></i>
+                  <span>Deterministic GIS Audit</span>
+                </span>
+                <span class="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md font-mono">UTM Zone 44N</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2 pt-0.5 text-[11px]">
+                <div class="bg-white p-2 rounded-xl border border-slate-100">
+                  <div class="text-slate-400 text-[10px]">GIS Polygon Area</div>
+                  <div id="gisAreaText" class="font-bold text-slate-800">10.35 Acres</div>
+                </div>
+                <div class="bg-white p-2 rounded-xl border border-slate-100">
+                  <div class="text-slate-400 text-[10px]">Claimed Extent</div>
+                  <div id="docAreaText" class="font-bold text-slate-800">10.35 Acres</div>
+                </div>
+                <div class="bg-white p-2 rounded-xl border border-slate-100">
+                  <div class="text-slate-400 text-[10px]">Road Proximity</div>
+                  <div id="roadDistText" class="font-bold text-slate-800">206.1 m</div>
+                </div>
+                <div class="bg-white p-2 rounded-xl border border-slate-100">
+                  <div class="text-slate-400 text-[10px]">Waterbody Buffer</div>
+                  <div id="waterDistText" class="font-bold text-emerald-600">6,941 m (Safe)</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Agronomic Package of Practices -->
+            <div class="bg-emerald-50/70 border border-emerald-200/60 rounded-2xl p-3 space-y-1.5">
+              <div class="font-bold text-emerald-900 flex items-center space-x-1.5">
+                <i data-lucide="book-open" class="w-3.5 h-3.5 text-emerald-700"></i>
+                <span id="advisoryTitle">Agronomic Package of Practices</span>
+              </div>
+              <p id="advisoryBody" class="text-emerald-950 text-[11px] leading-relaxed">
+                Apply balanced NPK fertilizer and schedule drip irrigation as per Tamil Nadu Agricultural University guidelines.
+              </p>
+              <div class="text-[10px] text-emerald-800/80 font-medium italic pt-1 border-t border-emerald-200/50">
+                Source: <span id="advisoryCitation">TNAU Agritech Portal / ICAR Bulletin</span>
+              </div>
+            </div>
+
+            <!-- FTS Score & Telemetry Steps -->
+            <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800">Trust Score (FTS)</span>
+                <span id="ftsValueText" class="font-extrabold text-brand-600 text-xs">0.884 / 1.0</span>
+              </div>
+              <div id="traceSteps" class="space-y-1 text-[10px] font-mono">
+                <!-- Dynamically populated trace steps -->
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- AWS BEDROCK CONFIGURATION MODAL -->
+  <div id="awsModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center text-white">
+            <i data-lucide="cloud" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-900 text-sm">AWS Bedrock Configuration</h3>
+            <p class="text-[11px] text-slate-400">Region: ap-south-1 (Mumbai) · Account: 9271-6111-4491</p>
+          </div>
+        </div>
+        <button onclick="closeAwsModal()" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Paste your temporary AWS CLI credentials from the AWS Access Portal (Identity Center SSO) to enable direct cloud foundation model calls.
+      </p>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-semibold text-slate-700 block mb-1">AWS Access Key ID</label>
+          <input type="text" id="awsKeyId" placeholder="ASIA..." class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs focus:ring-2 focus:ring-brand-500/20 focus:outline-none">
+        </div>
+        <div>
+          <label class="font-semibold text-slate-700 block mb-1">AWS Secret Access Key</label>
+          <input type="password" id="awsSecretKey" placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs focus:ring-2 focus:ring-brand-500/20 focus:outline-none">
+        </div>
+        <div>
+          <label class="font-semibold text-slate-700 block mb-1">AWS Session Token (SSO / IAM Identity Center)</label>
+          <textarea id="awsSessionToken" rows="3" placeholder="IQoJb3JpZ2luX2VjE..." class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[10px] focus:ring-2 focus:ring-brand-500/20 focus:outline-none"></textarea>
+        </div>
+        <div>
+          <label class="font-semibold text-slate-700 block mb-1">Model ID</label>
+          <select id="awsModelId" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono">
+            <option value="mistral.ministral-3b-instruct">mistral.ministral-3b-instruct (274ms latency - Mumbai)</option>
+            <option value="anthropic.claude-3-5-sonnet-20241022-v2:0">anthropic.claude-3-5-sonnet (High Reasoning)</option>
+            <option value="amazon.titan-text-express-v1">amazon.titan-text-express-v1</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pt-2 flex items-center justify-end space-x-2 border-t border-slate-100">
+        <button onclick="closeAwsModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">Cancel</button>
+        <button onclick="saveAwsSettings()" id="saveAwsBtn" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20 transition">Save & Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION JAVASCRIPT -->
+  <script>
+    let map;
+    let allParcelsGeoJsonLayer;
+    let activePolygonLayer;
+    let roadsLayer;
+    let waterLayer;
+    let satelliteLayer;
+    let positronLayer;
+    let isSatellite = false;
+    let isParcelsVisible = true;
+    let isRoadsVisible = true;
+    let isWaterVisible = true;
+    let isDrawerCollapsed = false;
+    let currentRouteLayer = null;
+    let depotMarker = null;
+
+    let allParcelsList = [];
+    let currentSurvey = "384";
+
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      initMap();
+      loadAllParcelsData();
+      checkAwsStatus();
+    });
+
+    function initMap() {
+      // Centered on Keelathattaparai, Thoothukudi
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([8.784, 78.026], 14);
+
+      // Default Basemap: CartoDB Voyager
+      positronLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+      }).addTo(map);
+
+      // Satellite Basemap (Esri World Imagery)
+      satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19
+      });
+
+      // Load Waterbodies Layer
+      fetch('/api/geojson/waterbodies')
+        .then(r => r.json())
+        .then(data => {
+          waterLayer = L.geoJSON(data, {
+            style: {
+              fillColor: '#3B82F6',
+              weight: 1.5,
+              opacity: 0.9,
+              color: '#1D4ED8',
+              fillOpacity: 0.4
+            }
+          }).addTo(map);
+        });
+
+      // Load Roads Layer
+      fetch('/api/geojson/roads')
+        .then(r => r.json())
+        .then(data => {
+          roadsLayer = L.geoJSON(data, {
+            style: {
+              color: '#64748B',
+              weight: 2,
+              opacity: 0.75,
+              dashArray: '3, 4'
+            }
+          }).addTo(map);
+        });
+    }
+
+    function loadAllParcelsData() {
+      // Fetch full 396-parcel GeoJSON layer
+      fetch('/api/geojson/all-parcels')
+        .then(r => r.json())
+        .then(geoJsonData => {
+          allParcelsList = geoJsonData.features.map(f => {
+            const p = f.properties;
+            return {
+              survey_no: String(p.survey_no),
+              name: `Survey ${p.survey_no} - Block ${p.block_id || '1'}`,
+              village: p.vil_name || 'Keelathattaparai',
+              district: p.dist_name || 'Thoothukudi',
+              area_acres: p.area_acres || 5.0,
+              status: p.status || 'Verified',
+              badge: p.badge || 'success',
+              crop: p.crop || 'Field Crop',
+              owner: p.owner || `Landholder (Survey ${p.survey_no})`,
+              feature: f
+            };
+          });
+
+          document.getElementById('totalCount').innerText = allParcelsList.length;
+          document.getElementById('loadedParcelsCountBadge').innerText = `${allParcelsList.length} Live`;
+          
+          // Render Left Table
+          renderParcelTable(allParcelsList);
+
+          // Render Full Interactive Vector Layer on Leaflet
+          renderParcelsOnMap(geoJsonData);
+
+          // Auto-select first parcel (384)
+          selectParcel("384", false);
+        });
+    }
+
+    function getParcelStyle(feature) {
+      const s = feature.properties.status;
+      const isSelected = String(feature.properties.survey_no) === String(currentSurvey);
+
+      let fillColor = '#27AE60';
+      let strokeColor = '#166E3A';
+
+      if (s === 'Discrepancy') {
+        fillColor = '#EF4444';
+        strokeColor = '#B91C1C';
+      } else if (s === 'Escalated') {
+        fillColor = '#F59E0B';
+        strokeColor = '#B45309';
+      }
+
+      return {
+        fillColor: fillColor,
+        weight: isSelected ? 3.5 : 1.2,
+        color: isSelected ? '#10B981' : strokeColor,
+        fillOpacity: isSelected ? 0.65 : 0.28,
+        dashArray: isSelected ? '' : ''
+      };
+    }
+
+    function renderParcelsOnMap(geoJsonData) {
+      if (allParcelsGeoJsonLayer) {
+        map.removeLayer(allParcelsGeoJsonLayer);
+      }
+
+      allParcelsGeoJsonLayer = L.geoJSON(geoJsonData, {
+        style: getParcelStyle,
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties;
+          
+          // Hover Tooltip
+          layer.bindTooltip(`
+            <div style="font-weight:700;color:#10B981;">Survey ${p.survey_no}</div>
+            <div style="font-size:10px;color:#94a3b8;">${p.area_acres} ac · ${p.status}</div>
+            <div style="font-size:10px;color:#cbd5e1;">${p.crop}</div>
+          `, { className: 'parcel-tooltip', sticky: true });
+
+          // Mouseover Highlight
+          layer.on('mouseover', function () {
+            this.setStyle({
+              weight: 3,
+              fillOpacity: 0.55
+            });
+          });
+
+          // Mouseout Reset
+          layer.on('mouseout', function () {
+            if (String(p.survey_no) !== String(currentSurvey)) {
+              allParcelsGeoJsonLayer.resetStyle(this);
+            }
+          });
+
+          // Click to Select & Inspect
+          layer.on('click', () => {
+            selectParcel(String(p.survey_no), true);
+          });
+        }
+      }).addTo(map);
+    }
+
+    function renderParcelTable(parcels) {
+      const container = document.getElementById('parcelListContainer');
+      container.innerHTML = '';
+
+      const subset = parcels.slice(0, 60); // Responsive render for first 60
+
+      subset.forEach(p => {
+        const isSelected = p.survey_no === currentSurvey;
+        const row = document.createElement('div');
+        row.className = `p-3 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition ${isSelected ? 'bg-brand-50/70 border-l-4 border-brand-600' : ''}`;
+        row.onclick = () => selectParcel(p.survey_no, true);
+
+        const badgeColor = p.badge === 'error' ? 'bg-rose-100 text-rose-800' : 
+                          (p.badge === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800');
+
+        row.innerHTML = `
+          <div class="w-2/5 flex items-center space-x-2">
+            <input type="checkbox" ${isSelected ? 'checked' : ''} class="rounded text-brand-600 pointer-events-none w-3.5 h-3.5">
+            <div class="truncate">
+              <div class="font-bold text-xs text-slate-900 truncate">${p.name}</div>
+              <div class="text-[10px] text-slate-400">${p.area_acres} ac · Keelathatta...</div>
+            </div>
+          </div>
+          <div class="w-1/4 text-xs font-medium text-slate-600 truncate">${p.crop}</div>
+          <div class="w-1/4 text-center">
+            <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeColor}">
+              ${p.status}
+            </span>
+          </div>
+          <div class="w-8 text-right text-slate-400 hover:text-slate-800">
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 inline"></i>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+      lucide.createIcons();
+    }
+
+    function selectParcel(surveyNo, shouldFly = true) {
+      currentSurvey = String(surveyNo);
+      document.getElementById('activeSurveyBadge').innerText = `Survey ${surveyNo}`;
+      
+      // Re-style map layer to highlight newly selected parcel
+      if (allParcelsGeoJsonLayer) {
+        allParcelsGeoJsonLayer.setStyle(getParcelStyle);
+      }
+
+      // Fetch parcel geometry and details
+      fetch(`/api/parcel/${surveyNo}`)
+        .then(r => r.json())
+        .then(data => {
+          const p = data.parcel;
+          const c = data.constraints;
+
+          // Remove standalone active polygon
+          if (activePolygonLayer) {
+            map.removeLayer(activePolygonLayer);
+          }
+
+          // Bold outline on active parcel
+          activePolygonLayer = L.geoJSON(p.geometry_geojson, {
+            style: {
+              fillColor: '#10B981',
+              weight: 4,
+              color: '#047857',
+              fillOpacity: 0.6
+            }
+          }).addTo(map);
+
+          if (shouldFly) {
+            map.flyTo([p.centroid.latitude, p.centroid.longitude], 16, { duration: 1.0 });
+          }
+
+          // Update Inspection Drawer Details
+          document.getElementById('drawerTitle').innerText = `Survey ${surveyNo} Inspection`;
+          document.getElementById('drawerSubtitle').innerText = `${p.area_acres} Acres · ${p.village}`;
+          document.getElementById('gisAreaText').innerText = `${p.area_acres} Acres`;
+          document.getElementById('docAreaText').innerText = `${p.area_acres} Acres`;
+          document.getElementById('roadDistText').innerText = `${c.distance_to_road_meters} m`;
+          document.getElementById('waterDistText').innerText = `${c.distance_to_waterbody_meters} m (${c.waterbody_buffer_conflict ? 'CONFLICT' : 'Safe'})`;
+
+          // Clear previous route & reset guidance
+          if (currentRouteLayer) {
+            map.removeLayer(currentRouteLayer);
+            currentRouteLayer = null;
+          }
+          if (depotMarker) {
+            map.removeLayer(depotMarker);
+            depotMarker = null;
+          }
+          document.getElementById('routeStepsDrawer').classList.add('hidden');
+          document.getElementById('routeStepsDrawer').innerHTML = '';
+
+          // Fetch Amazon Location Reverse Geocode
+          fetch(`/api/location/reverse-geocode/${surveyNo}`)
+            .then(r => r.json())
+            .then(loc => {
+              document.getElementById('reverseAddressText').innerText = loc.formatted_address;
+              document.getElementById('talukText').innerText = loc.taluk || "Thoothukudi";
+            });
+
+          // Fetch Amazon Location Cadastral Geofence
+          fetch(`/api/location/geofence/${surveyNo}`)
+            .then(r => r.json())
+            .then(geo => {
+              const gf = document.getElementById('geofenceStatusText');
+              gf.innerText = geo.geofence_status;
+              gf.className = geo.environmental_clearance ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
+            });
+
+          // Trigger AI Reasoning & Verification
+          triggerVerification();
+        });
+    }
+
+    function calculateAndDisplayRoute() {
+      const rBtn = document.getElementById('routeBtn');
+      rBtn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Routing...</span>`;
+      rBtn.disabled = true;
+      lucide.createIcons();
+
+      fetch('/api/location/route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ survey_no: currentSurvey })
+      })
+      .then(r => r.json())
+      .then(data => {
+        rBtn.innerHTML = `<i data-lucide="navigation" class="w-3.5 h-3.5"></i><span>Plot Route from Vagaikulam Depot</span>`;
+        rBtn.disabled = false;
+        lucide.createIcons();
+
+        // Update badge
+        document.getElementById('routeMetricBadge').innerText = `${data.distance_km} km · ${data.duration_minutes} mins`;
+
+        // Clear previous route
+        if (currentRouteLayer) {
+          map.removeLayer(currentRouteLayer);
+        }
+        if (depotMarker) {
+          map.removeLayer(depotMarker);
+        }
+
+        // Add Depot Marker
+        depotMarker = L.marker([data.origin.latitude, data.origin.longitude], {
+          title: data.origin.name
+        }).addTo(map);
+        depotMarker.bindPopup(`<b>${data.origin.name}</b><br><span style="font-size:10px;color:#64748b">TNAU Agricultural Distribution Hub</span>`).openPopup();
+
+        // Draw Route Polyline
+        currentRouteLayer = L.geoJSON(data.geojson_route, {
+          style: {
+            color: '#2563EB',
+            weight: 5,
+            opacity: 0.9,
+            dashArray: '8, 8'
+          }
+        }).addTo(map);
+
+        // Fit map bounds to show full route from depot to parcel
+        map.fitBounds(currentRouteLayer.getBounds(), { padding: [70, 70] });
+
+        // Display turn-by-turn guidance
+        const stepsDrawer = document.getElementById('routeStepsDrawer');
+        stepsDrawer.classList.remove('hidden');
+        stepsDrawer.innerHTML = '';
+        data.steps.forEach(step => {
+          stepsDrawer.innerHTML += `<div class="py-0.5 border-b border-slate-100 flex items-center space-x-1.5"><span class="text-blue-500 font-bold">➜</span><span>${step}</span></div>`;
+        });
+      })
+      .catch(err => {
+        rBtn.innerHTML = `<i data-lucide="navigation" class="w-3.5 h-3.5"></i><span>Plot Route from Vagaikulam Depot</span>`;
+        rBtn.disabled = false;
+        alert("Routing error: " + err);
+        lucide.createIcons();
+      });
+    }
+
+    function triggerVerification() {
+      executeAiQuery(`Analyze Survey Number ${currentSurvey} in Keelathattaparai village and verify crop health`);
+    }
+
+    function quickPrompt(text) {
+      document.getElementById('aiQueryInput').value = text;
+      executeAiQuery(text);
+    }
+
+    function executeAiQuery(customQuery) {
+      const qInput = document.getElementById('aiQueryInput');
+      const query = customQuery || qInput.value.trim();
+      if (!query) return;
+
+      const submitBtn = document.getElementById('aiSubmitBtn');
+      submitBtn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Reasoning...</span>`;
+      submitBtn.disabled = true;
+      lucide.createIcons();
+
+      // Show processing state in drawer
+      document.getElementById('aiAnswerContent').innerHTML = `
+        <div class="flex items-center space-x-2 text-slate-500 py-2">
+          <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-brand-600"></i>
+          <span>Executing Multimodal Agentic Reasoning pipeline...</span>
+        </div>
+      `;
+      lucide.createIcons();
+
+      const payload = {
+        query: query,
+        survey_no: currentSurvey,
+        force_escalate: document.getElementById('simEscalate').checked,
+        simulate_conflict: document.getElementById('simConflict').checked
+      };
+
+      fetch('/api/ai/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(r => r.json())
+      .then(res => {
+        submitBtn.innerHTML = `<span>Ask AI</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`;
+        submitBtn.disabled = false;
+        lucide.createIcons();
+
+        // Update active survey if AI extracted a different one
+        if (res.target_survey_no && res.target_survey_no !== currentSurvey) {
+          currentSurvey = res.target_survey_no;
+          document.getElementById('activeSurveyBadge').innerText = `Survey ${currentSurvey}`;
+          if (allParcelsGeoJsonLayer) {
+            allParcelsGeoJsonLayer.setStyle(getParcelStyle);
+          }
+        }
+
+        // Update AI Badge & Latency
+        document.getElementById('aiModelBadgeText').innerText = res.model_used;
+        document.getElementById('aiLatencyBadge').innerText = `${res.latency_ms}ms · ${res.tokens.total_tokens} tokens`;
+
+        // Render AI Answer (Markdown support)
+        if (typeof marked !== 'undefined') {
+          document.getElementById('aiAnswerContent').innerHTML = marked.parse(res.answer);
+        } else {
+          document.getElementById('aiAnswerContent').innerText = res.answer;
+        }
+
+        // Render Chain-of-Thought Steps
+        const thoughtContainer = document.getElementById('aiThoughtStepsList');
+        thoughtContainer.innerHTML = '';
+        res.thought_process.forEach(step => {
+          thoughtContainer.innerHTML += `<div class="py-0.5 border-b border-slate-100">${step}</div>`;
+        });
+
+        // Update Drawer Decision Badge
+        const trust = res.trust_metrics;
+        const dBadge = document.getElementById('drawerDecisionBadge');
+        const dec = trust.verification_status.replace("VERIFIED_", "");
+        dBadge.innerText = dec;
+        if (dec === 'ACCEPT') {
+          dBadge.className = "px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800";
+        } else if (dec === 'ESCALATE') {
+          dBadge.className = "px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-800";
+        } else {
+          dBadge.className = "px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-100 text-rose-800";
+        }
+
+        // Update Crop & Advisory
+        const attrs = res.extracted_attributes;
+        const adv = res.advisory_recommendation;
+        const vobj = res.verified_result_object;
+
+        if (vobj.source_evidence && vobj.source_evidence[2] && vobj.source_evidence[2].source_ref) {
+          document.getElementById('fieldPhotoImg').src = '/api/image/' + vobj.source_evidence[2].source_ref;
+        }
+        document.getElementById('photoBadge').innerText = `${attrs.predicted_crop} · ${attrs.growth_stage}`;
+        document.getElementById('advisoryTitle').innerText = adv.advisory_title || "Agronomy Advisory";
+        document.getElementById('advisoryBody').innerText = adv.fertilizer_schedule;
+        document.getElementById('advisoryCitation').innerText = adv.citation_source;
+        document.getElementById('ftsValueText').innerText = `${trust.task_trust_score_fts} / 1.0`;
+
+        // Update Telemetry Steps
+        const traceContainer = document.getElementById('traceSteps');
+        traceContainer.innerHTML = '';
+        res.routing_telemetry.steps.forEach(s => {
+          traceContainer.innerHTML += `
+            <div class="flex items-center justify-between p-1 bg-white rounded border border-slate-100">
+              <span class="truncate max-w-[180px] text-slate-700">${s.name}</span>
+              <span class="text-slate-400">${s.model_or_tool}</span>
+              <span class="text-emerald-600 font-bold">${s.latency_ms}ms</span>
+            </div>
+          `;
+        });
+      })
+      .catch(err => {
+        submitBtn.innerHTML = `<span>Ask AI</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`;
+        submitBtn.disabled = false;
+        document.getElementById('aiAnswerContent').innerText = "AI query error: " + err;
+        lucide.createIcons();
+      });
+    }
+
+    // MAP TOGGLE CONTROLS
+    function toggleCadastralLayer() {
+      if (!allParcelsGeoJsonLayer) return;
+      if (isParcelsVisible) {
+        map.removeLayer(allParcelsGeoJsonLayer);
+        document.getElementById('cadastralToggleBtn').className = "w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-400 transition";
+      } else {
+        map.addLayer(allParcelsGeoJsonLayer);
+        document.getElementById('cadastralToggleBtn').className = "w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-brand-600 transition";
+      }
+      isParcelsVisible = !isParcelsVisible;
+    }
+
+    function toggleRoadsLayer() {
+      if (!roadsLayer) return;
+      if (isRoadsVisible) {
+        map.removeLayer(roadsLayer);
+        document.getElementById('roadsToggleBtn').className = "w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-400 transition";
+      } else {
+        map.addLayer(roadsLayer);
+        document.getElementById('roadsToggleBtn').className = "w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-700 transition";
+      }
+      isRoadsVisible = !isRoadsVisible;
+    }
+
+    function toggleWaterLayer() {
+      if (!waterLayer) return;
+      if (isWaterVisible) {
+        map.removeLayer(waterLayer);
+        document.getElementById('waterToggleBtn').className = "w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-400 transition";
+      } else {
+        map.addLayer(waterLayer);
+        document.getElementById('waterToggleBtn').className = "w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-blue-600 transition";
+      }
+      isWaterVisible = !isWaterVisible;
+    }
+
+    function toggleSatelliteTile() {
+      if (isSatellite) {
+        map.removeLayer(satelliteLayer);
+        map.addLayer(positronLayer);
+        document.getElementById('satelliteToggleBtn').className = "w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-500 transition";
+      } else {
+        map.removeLayer(positronLayer);
+        map.addLayer(satelliteLayer);
+        document.getElementById('satelliteToggleBtn').className = "w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-amber-500 transition";
+      }
+      isSatellite = !isSatellite;
+    }
+
+    function centerActiveParcel() {
+      if (activePolygonLayer) {
+        map.fitBounds(activePolygonLayer.getBounds(), { padding: [80, 80] });
+      }
+    }
+
+    function toggleDrawer() {
+      const body = document.getElementById('drawerBody');
+      const chev = document.getElementById('drawerChevron');
+      isDrawerCollapsed = !isDrawerCollapsed;
+      if (isDrawerCollapsed) {
+        body.style.display = 'none';
+        chev.setAttribute('data-lucide', 'chevron-up');
+      } else {
+        body.style.display = 'block';
+        chev.setAttribute('data-lucide', 'chevron-down');
+      }
+      lucide.createIcons();
+    }
+
+    function filterTable(type) {
+      document.getElementById('tabAll').className = type === 'all' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
+      document.getElementById('tabFlagged').className = type === 'flagged' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
+      document.getElementById('tabRedTeam').className = type === 'redteam' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
+      
+      const drawer = document.getElementById('redTeamDrawer');
+      if (type === 'redteam') {
+        drawer.classList.remove('hidden');
+      } else {
+        drawer.classList.add('hidden');
+      }
+
+      if (type === 'flagged') {
+        const flagged = allParcelsList.filter(p => p.badge !== 'success');
+        renderParcelTable(flagged);
+      } else {
+        renderParcelTable(allParcelsList);
+      }
+    }
+
+    function handleSearch() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allParcelsList.filter(p => p.survey_no.toLowerCase().includes(q) || p.owner.toLowerCase().includes(q));
+      renderParcelTable(filtered);
+    }
+
+    function switchMode(mode) {
+      if (mode === 'audit') {
+        filterTable('flagged');
+      } else if (mode === 'ai') {
+        document.getElementById('aiQueryInput').focus();
+      }
+    }
+
+    // AWS CREDENTIALS MODAL
+    function openAwsModal() {
+      document.getElementById('awsModal').classList.remove('hidden');
+    }
+
+    function closeAwsModal() {
+      document.getElementById('awsModal').classList.add('hidden');
+    }
+
+    function saveAwsSettings() {
+      const keyId = document.getElementById('awsKeyId').value.trim();
+      const secret = document.getElementById('awsSecretKey').value.trim();
+      const session = document.getElementById('awsSessionToken').value.trim();
+
+      if (!keyId || !secret) {
+        alert("Please enter AWS Access Key ID and Secret Access Key.");
+        return;
+      }
+
+      const saveBtn = document.getElementById('saveAwsBtn');
+      saveBtn.innerText = "Connecting...";
+      saveBtn.disabled = true;
+
+      fetch('/api/settings/aws', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access_key_id: keyId,
+          secret_access_key: secret,
+          session_token: session || null,
+          region: "ap-south-1"
+        })
+      })
+      .then(r => r.json())
+      .then(st => {
+        saveBtn.innerText = "Save & Connect";
+        saveBtn.disabled = false;
+        closeAwsModal();
+        checkAwsStatus();
+      })
+      .catch(e => {
+        saveBtn.innerText = "Save & Connect";
+        saveBtn.disabled = false;
+        alert("Configuration error: " + e);
+      });
+    }
+
+    function checkAwsStatus() {
+      fetch('/api/settings/aws/status')
+        .then(r => r.json())
+        .then(st => {
+          const btn = document.getElementById('bedrockStatusBtn');
+          const dot = document.getElementById('bedrockStatusDot');
+          const text = document.getElementById('bedrockStatusText');
+
+          if (st.bedrock_client_ready) {
+            btn.className = "flex items-center space-x-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-300 text-xs font-medium transition";
+            dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+            text.innerText = `AWS Bedrock Ministral (274ms)`;
+          } else {
+            btn.className = "flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-800 px-3.5 py-1.5 rounded-full border border-slate-300 text-xs font-medium transition";
+            dot.className = "w-2 h-2 rounded-full bg-brand-500 animate-pulse";
+            text.innerText = `AI Reasoner (Active)`;
+          }
+        });
+    }
+  </script>
+</body>
+</html>
