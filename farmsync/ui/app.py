@@ -288,12 +288,12 @@ with tab_graph:
     st.markdown("#### Trust Score (FTS) Mathematical Breakdown")
     breakdown = trust["signal_breakdown"]
     df_b = pd.DataFrame([
-        {"Signal": "Historical Calibration (w1=0.20)", "Value": breakdown["calibration"]},
-        {"Signal": "Evidence Coverage (w2=0.20)", "Value": breakdown["evidence_coverage"]},
-        {"Signal": "Source Consistency (w3=0.20)", "Value": breakdown["source_consistency"]},
-        {"Signal": "Deterministic Spatial Validation (w4=0.20)", "Value": breakdown["deterministic_validation"]},
+        {"Signal": "Historical Calibration (w1=0.15)", "Value": breakdown["calibration"]},
+        {"Signal": "Evidence Coverage (w2=0.25)", "Value": breakdown["evidence_coverage"]},
+        {"Signal": "Source Consistency (w3=0.25)", "Value": breakdown["source_consistency"]},
+        {"Signal": "Deterministic Spatial Validation (w4=0.25)", "Value": breakdown["deterministic_validation"]},
         {"Signal": "Output Schema Validity (w5=0.10)", "Value": breakdown["output_validity"]},
-        {"Signal": "Conflict Penalty (w6=0.10)", "Value": f"-{breakdown['conflict_penalty']}"}
+        {"Signal": "Conflict Penalty (w6=0.20)", "Value": f"-{breakdown['conflict_penalty']}"}
     ])
     st.table(df_b)
 

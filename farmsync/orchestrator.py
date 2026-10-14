@@ -368,6 +368,21 @@ class FarmSyncOrchestrator:
             doc_reg_match = bool(reg_check.get("owner_match", False) and has_land_doc)
             spatial_match = (extent_check.get("verification_status") == "MATCH")
 
+            candidate_payload = {
+                "survey_number": context["survey_no"],
+                "village": context["village"],
+                "extracted_attributes": {
+                    "registered_owner": reg_check.get("official_owner") or doc_claims.get("extracted_owner"),
+                    "gis_area_acres": parcel_gis.get("area_acres") if parcel_gis else None,
+                    "predicted_crop": vision_result.get("final_verified_crop"),
+                    "growth_stage": vision_result.get("final_verified_stage")
+                },
+                "deterministic_spatial_checks": {
+                    "spatial_extent_verified": spatial_match,
+                    "waterbody_buffer_compliant": not spatial_constraints.get("waterbody_buffer_conflict", False)
+                }
+            }
+
             trust_result = self.trust_engine.evaluate_trust(
                 vision_confidence=vision_result.get("confidence", 0.0),
                 is_supported_crop=not context["simulate_unsupported_crop"],
@@ -376,7 +391,8 @@ class FarmSyncOrchestrator:
                 waterbody_conflict=spatial_constraints.get("waterbody_buffer_conflict", False),
                 has_field_photo=has_photo,
                 has_land_doc=has_land_doc,
-                has_registry=has_reg and has_parcel
+                has_registry=has_reg and has_parcel,
+                output_payload=candidate_payload
             )
             context["trust_result"] = trust_result
             return {
