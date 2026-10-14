@@ -26,7 +26,7 @@ app.add_middleware(
 # Initialize core engines
 orchestrator = FarmSyncOrchestrator()
 ai_engine = AIAssistantEngine(orchestrator=orchestrator)
-location_engine = AmazonLocationServiceEngine(spatial_engine=orchestrator.spatial)
+location_engine = orchestrator.location_engine
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

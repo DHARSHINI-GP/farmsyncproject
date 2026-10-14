@@ -17,7 +17,8 @@ class EvidenceGraphBuilder:
         vision_result: Optional[Dict[str, Any]],
         advisory_result: Optional[Dict[str, Any]],
         trust_result: Optional[Dict[str, Any]],
-        telemetry: Optional[Dict[str, Any]]
+        telemetry: Optional[Dict[str, Any]],
+        agri_logistics: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Builds complete VerifiedResultObject following the schema promised in the proposal.
@@ -60,6 +61,55 @@ class EvidenceGraphBuilder:
             {"from": "claim_root", "to": "trust_node", "relation": "evaluated_by"}
         ]
 
+        if agri_logistics and "distance_km" in agri_logistics:
+            d_km = agri_logistics.get("distance_km")
+            is_aws = agri_logistics.get("aws_credentials_available", False)
+            src_lbl = "Amazon Location" if is_aws else "Local Haversine"
+            nodes.append({
+                "id": "logistics_node",
+                "label": f"Transit: {d_km} km ({src_lbl})",
+                "type": "LOGISTICS_ROUTE"
+            })
+            edges.append({
+                "from": "claim_root",
+                "to": "logistics_node",
+                "relation": "depot_transit_routed"
+            })
+
+        source_evidence = [
+            {
+                "source_type": "DOCUMENT_OCR",
+                "source_ref": doc_claims.get("document_source"),
+                "extracted_value": doc_claims.get("extracted_owner"),
+                "claimed_extent_acres": doc_claims.get("claimed_extent_acres"),
+                "page_number": doc_claims.get("page_number"),
+                "confidence": doc_claims.get("ocr_confidence") if doc_found else 0.0,
+                "status": "VERIFIED_EXTRACTED" if doc_found else "EVIDENCE_NOT_FOUND"
+            },
+            {
+                "source_type": "DATABASE_REGISTRY",
+                "source_ref": "Thoothukudi_Land_Registry.parcels",
+                "extracted_value": reg_owner,
+                "confidence": 1.00 if registry_check.get("registry_found") else 0.0,
+                "status": "FOUND_IN_REGISTRY" if registry_check.get("registry_found") else "REGISTRY_ABSENT"
+            },
+            {
+                "source_type": "FIELD_PHOTOGRAPH",
+                "source_ref": vision_result.get("image_filename"),
+                "extracted_crop": vision_result.get("final_verified_crop"),
+                "confidence": vision_result.get("final_confidence")
+            }
+        ]
+
+        if agri_logistics and "distance_km" in agri_logistics:
+            source_evidence.append({
+                "source_type": "AGRI_LOGISTICS_ROUTING",
+                "source_ref": agri_logistics.get("source"),
+                "distance_km": agri_logistics.get("distance_km"),
+                "duration_minutes": agri_logistics.get("duration_minutes"),
+                "aws_connected": agri_logistics.get("aws_credentials_available", False)
+            })
+
         verified_object = {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "title": "VerifiedResultObject",
@@ -79,30 +129,7 @@ class EvidenceGraphBuilder:
                 "document_found": doc_found,
                 "document_source": doc_claims.get("document_source")
             },
-            "source_evidence": [
-                {
-                    "source_type": "DOCUMENT_OCR",
-                    "source_ref": doc_claims.get("document_source"),
-                    "extracted_value": doc_claims.get("extracted_owner"),
-                    "claimed_extent_acres": doc_claims.get("claimed_extent_acres"),
-                    "page_number": doc_claims.get("page_number"),
-                    "confidence": doc_claims.get("ocr_confidence") if doc_found else 0.0,
-                    "status": "VERIFIED_EXTRACTED" if doc_found else "EVIDENCE_NOT_FOUND"
-                },
-                {
-                    "source_type": "DATABASE_REGISTRY",
-                    "source_ref": "Thoothukudi_Land_Registry.parcels",
-                    "extracted_value": reg_owner,
-                    "confidence": 1.00 if registry_check.get("registry_found") else 0.0,
-                    "status": "FOUND_IN_REGISTRY" if registry_check.get("registry_found") else "REGISTRY_ABSENT"
-                },
-                {
-                    "source_type": "FIELD_PHOTOGRAPH",
-                    "source_ref": vision_result.get("image_filename"),
-                    "extracted_crop": vision_result.get("final_verified_crop"),
-                    "confidence": vision_result.get("final_confidence")
-                }
-            ],
+            "source_evidence": source_evidence,
             "deterministic_spatial_checks": {
                 "spatial_engine": spatial_constraints.get("spatial_engine", "GeoPandas_Shapely_UTM44N"),
                 "cadastral_containment_valid": spatial_constraints.get("cadastral_containment_valid", False),
@@ -126,6 +153,7 @@ class EvidenceGraphBuilder:
             },
             "routing_telemetry": telemetry,
             "advisory_recommendation": advisory_result,
+            "agri_logistics": agri_logistics,
             "evidence_graph_dag": {
                 "nodes": nodes,
                 "edges": edges

@@ -204,6 +204,27 @@ with tab_map:
                 popup=f"Survey {survey_clean}<br>Owner: {attrs['registered_owner']}<br>Area: {parcel_data['area_acres']} Acres",
                 icon=folium.Icon(color="green", icon="leaf")
             ).add_to(m)
+
+            # Route & Depot Marker from Agri-Logistics
+            if vobj.get("agri_logistics") and "origin" in vobj["agri_logistics"]:
+                alog = vobj["agri_logistics"]
+                depot = alog["origin"]
+                folium.Marker(
+                    [depot["latitude"], depot["longitude"]],
+                    popup=depot["name"],
+                    icon=folium.Icon(color="blue", icon="home")
+                ).add_to(m)
+                if "geojson_route" in alog and "coordinates" in alog["geojson_route"]:
+                    folium.GeoJson(
+                        alog["geojson_route"],
+                        name="Ag-Logistics Supply Route",
+                        style_function=lambda x: {
+                            "color": "#2980B9",
+                            "weight": 4,
+                            "dashArray": "6, 6" if not alog.get("aws_credentials_available") else None
+                        },
+                        tooltip=f"Route: {alog.get('distance_km')} km ({alog.get('duration_minutes')} min)"
+                    ).add_to(m)
             
             st_folium(m, width="100%", height=450)
         else:
@@ -230,6 +251,16 @@ with tab_map:
         st.markdown(f"• Distance to Road Network: **`{spatial_checks['distance_to_road_meters']} m`**")
         st.markdown(f"• Direct Road Access: **`{spatial_checks['road_accessible']}`**")
         st.caption(f"Engine: *{spatial_checks.get('spatial_engine', 'GeoPandas & Shapely (UTM Zone 44N)')}*")
+
+        if vobj.get("agri_logistics") and not vobj["agri_logistics"].get("error"):
+            alog = vobj["agri_logistics"]
+            st.markdown("---")
+            st.markdown("**Ag-Logistics & Supply Transit:**")
+            st.markdown(f"• Origin Depot: `{alog['origin']['name']}`")
+            st.markdown(f"• Road Distance: **`{alog['distance_km']} km`**")
+            st.markdown(f"• Travel Time: **`{alog['duration_minutes']} min`**")
+            src_lbl = "Amazon Location Service" if alog.get("aws_credentials_available") else "Local Haversine Estimate (1.28× Detour)"
+            st.caption(f"Routing Source: *{src_lbl}*")
 
 # Tab 2: Crop Vision & Advisory
 with tab_crop:

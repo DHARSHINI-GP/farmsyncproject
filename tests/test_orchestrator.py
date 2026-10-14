@@ -54,6 +54,31 @@ def test_injected_conflict_abstention(orchestrator):
     assert vobj["trust_metrics"]["verification_status"] == "VERIFIED_ABSTAIN"
     assert vobj["trust_metrics"]["task_trust_score_fts"] < 0.70
 
+def test_agri_logistics_integration(orchestrator):
+    """Case 4: Agri-Logistics & Routing Integration in Verified Result Object & DAG"""
+    query = "Using the supplied land document and field photograph for Keelathattaparai village, identify Survey Number 384, verify parcel and owner, predict crop and growth stage, and return verified recommendation."
+    res = orchestrator.execute_request(query)
+    vobj = res["verified_result_object"]
+
+    # Agri-logistics must be included in the verified result
+    assert "agri_logistics" in vobj
+    logistics = vobj["agri_logistics"]
+    assert logistics is not None
+    assert logistics["survey_no"] == "384"
+    assert logistics["distance_km"] > 0
+    assert "duration_minutes" in logistics
+    assert "LOCAL_HAVERSINE_ESTIMATE" in logistics["source"] or "Amazon Location" in logistics["source"]
+
+    # Source evidence must record logistics routing
+    logistics_evidence = next((s for s in vobj["source_evidence"] if s["source_type"] == "AGRI_LOGISTICS_ROUTING"), None)
+    assert logistics_evidence is not None
+    assert logistics_evidence["distance_km"] == logistics["distance_km"]
+
+    # Evidence graph DAG must contain a LOGISTICS_ROUTE node
+    logistics_node = next((n for n in vobj["evidence_graph_dag"]["nodes"] if n["type"] == "LOGISTICS_ROUTE"), None)
+    assert logistics_node is not None
+    assert "Transit:" in logistics_node["label"]
+
 
 def main():
     print("Testing FarmSyncOrchestrator End-to-End...")

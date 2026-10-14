@@ -6,6 +6,7 @@ from farmsync.router.compiler import TaskGraphCompiler, TaskGraph, TaskNode
 from farmsync.router.router import CapabilityRegistry, VerifiedUtilityRouter
 from farmsync.documents.extractor import DocumentRegistryEngine
 from farmsync.spatial.engine import SpatialEngine
+from farmsync.spatial.amazon_location import AmazonLocationServiceEngine
 from farmsync.vision.classifier import CropVisionClassifier
 from farmsync.knowledge.advisory import AgronomyKnowledgeEngine
 from farmsync.trust.trust_score import TrustEngine
@@ -37,6 +38,7 @@ class FarmSyncOrchestrator:
         # Grounded tool connectors
         self.docs = DocumentRegistryEngine()
         self.spatial = SpatialEngine(data_root=data_root)
+        self.location_engine = AmazonLocationServiceEngine(spatial_engine=self.spatial)
         self.vision = CropVisionClassifier()
         self.knowledge = AgronomyKnowledgeEngine()
 
@@ -85,6 +87,7 @@ class FarmSyncOrchestrator:
             "final_crop": None,
             "final_stage": None,
             "advisory_result": None,
+            "agri_logistics": None,
             "trust_result": None
         }
 
@@ -161,6 +164,7 @@ class FarmSyncOrchestrator:
         spatial_constraints = context["spatial_constraints"] or {}
         vision_result = context["vision_result"] or {}
         advisory_result = context["advisory_result"] or {}
+        agri_logistics = context["agri_logistics"]
         trust_result = context["trust_result"] or {}
 
         verified_result = self.graph_builder.build_evidence_object(
@@ -173,7 +177,8 @@ class FarmSyncOrchestrator:
             vision_result=vision_result,
             advisory_result=advisory_result,
             trust_result=trust_result,
-            telemetry=telemetry_summary
+            telemetry=telemetry_summary,
+            agri_logistics=agri_logistics
         )
 
         # Step 6: Head-to-head Baseline Benchmarking Matrix
@@ -267,6 +272,15 @@ class FarmSyncOrchestrator:
                         "discrepancy_exceeded": False,
                         "verification_status": "DOCUMENT_EXTENT_NOT_AVAILABLE"
                     }
+                try:
+                    agri_logistics = self.location_engine.calculate_agri_route(target_survey)
+                except Exception as e:
+                    agri_logistics = {
+                        "survey_no": target_survey,
+                        "error": str(e),
+                        "aws_credentials_available": False
+                    }
+                context["agri_logistics"] = agri_logistics
             else:
                 spatial_constraints = {
                     "survey_no": target_survey,
