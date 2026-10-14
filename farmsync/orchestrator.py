@@ -349,8 +349,12 @@ class FarmSyncOrchestrator:
             else:
                 escalation_decision = "CONFIDENT_STUDENT_ACCEPTED"
 
-            context["final_crop"] = vision_result.get("final_verified_crop", "Coconut")
-            context["final_stage"] = vision_result.get("final_verified_stage", "full_growth")
+            if context.get("simulate_unsupported_crop"):
+                context["final_crop"] = "Unclassified Alien Weed / Out-of-Distribution Flora"
+                context["final_stage"] = "unclassified"
+            else:
+                context["final_crop"] = vision_result.get("final_verified_crop", "Coconut")
+                context["final_stage"] = vision_result.get("final_verified_stage", "full_growth")
 
             return {
                 "escalation_decision": escalation_decision,
@@ -393,8 +397,8 @@ class FarmSyncOrchestrator:
                 "extracted_attributes": {
                     "registered_owner": reg_check.get("official_owner") or doc_claims.get("extracted_owner"),
                     "gis_area_acres": parcel_gis.get("area_acres") if parcel_gis else None,
-                    "predicted_crop": vision_result.get("final_verified_crop"),
-                    "growth_stage": vision_result.get("final_verified_stage")
+                    "predicted_crop": context.get("final_crop") or vision_result.get("final_verified_crop"),
+                    "growth_stage": context.get("final_stage") or vision_result.get("final_verified_stage")
                 },
                 "deterministic_spatial_checks": {
                     "spatial_extent_verified": spatial_match,

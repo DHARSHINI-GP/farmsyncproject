@@ -285,19 +285,38 @@ with tab_crop:
     with col_adv:
         st.subheader("Cited Agronomy Advisory (TNAU / ICAR)")
         adv = vobj["advisory_recommendation"]
-        st.info(f"📋 **{adv['advisory_title']}**")
-        
-        st.markdown("**Fertilizer Schedule:**")
-        st.write(adv["fertilizer_schedule"])
-        
-        st.markdown("**Water & Irrigation Management:**")
-        st.write(adv["water_management"])
-        
-        st.markdown("**Pest & Disease Control:**")
-        st.write(adv["pest_management"])
-        
-        st.markdown("---")
-        st.caption(f"📖 **Citation Source:** *{adv['citation_source']}*")
+        if adv.get("source_grounded", False):
+            sim = adv.get('retrieval_similarity')
+            sim_str = f"Cosine Sim: {sim:.3f}" if isinstance(sim, (int, float)) else "Dense Vector Match"
+            st.success(f"✅ **Grounded Advisory** · `{sim_str}`")
+            st.info(f"📋 **{adv.get('advisory_title', 'Agronomy Recommendation')}**")
+            
+            st.markdown("**Fertilizer Schedule:**")
+            fert = adv.get("fertilizer_schedule")
+            if isinstance(fert, dict):
+                for k, v in fert.items():
+                    st.markdown(f"- **{k.replace('_', ' ').title()}:** {v}")
+            else:
+                st.write(fert)
+            
+            st.markdown("**Water & Irrigation Management:**")
+            st.write(adv.get("water_management"))
+            
+            st.markdown("**Pest & Disease Control:**")
+            st.write(adv.get("pest_management"))
+            
+            st.markdown("---")
+            doc_id = adv.get('matched_document_id', 'N/A')
+            st.caption(f"📖 **Citation Source:** *{adv.get('citation_source')}* (`{doc_id}`)")
+        else:
+            st.error("🚫 **Zero-Hallucination Guardrail Active**")
+            st.warning(
+                f"**Advisory Refused**: {adv.get('advisory_title')}\n\n"
+                f"• **Reason**: {adv.get('note', 'No grounded ICAR/TNAU research document matches this crop.')}\n\n"
+                f"• **System Policy**: Refuse to invent ungrounded fertilizer schedules or chemical dosages for unverified/out-of-distribution crops."
+            )
+            st.markdown("---")
+            st.caption(f"📖 **Citation Status:** *{adv.get('citation_source')}*")
 
 # Tab 3: Evidence Graph
 with tab_graph:

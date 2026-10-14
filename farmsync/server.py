@@ -325,9 +325,15 @@ async def get_image(filename: str):
 
     raise HTTPException(status_code=404, detail=f"Field photo '{filename}' not found on disk")
 
+@app.get("/api/knowledge/status")
+async def get_knowledge_status():
+    """Returns Agronomy RAG FAISS vector index status and metrics."""
+    return orchestrator.knowledge.get_status()
+
 @app.get("/api/status")
 async def get_system_status():
     ai_status = ai_engine.get_status()
+    k_status = orchestrator.knowledge.get_status()
     return {
         "status": "ONLINE",
         "aws_region": ai_status["region"],
@@ -336,7 +342,10 @@ async def get_system_status():
         "s3_bucket": "fai-tce-team26-data",
         "dynamodb_table": "fai-tce-team26-telemetry",
         "total_cadastral_parcels": len(orchestrator.spatial.list_surveys()),
-        "total_indexed_field_photos": len(orchestrator.vision.image_registry)
+        "total_indexed_field_photos": len(orchestrator.vision.image_registry),
+        "rag_knowledge_engine": k_status.get("rag_engine"),
+        "faiss_indexed_documents": k_status.get("total_indexed_documents", 0),
+        "faiss_total_vectors": k_status.get("faiss_total_vectors", 0)
     }
 
 if __name__ == "__main__":
