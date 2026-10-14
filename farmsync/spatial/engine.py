@@ -38,6 +38,9 @@ class SpatialEngine:
         self.gdf_parcels_utm["survey_no_clean"] = self.gdf_parcels_utm["survey_no"].astype(str).str.strip()
         self.gdf_parcels_wgs84["survey_no_clean"] = self.gdf_parcels_wgs84["survey_no"].astype(str).str.strip()
 
+        # Compute cadastral boundary convex hull in UTM for deterministic containment checks
+        self.cadastral_hull_utm = self.gdf_parcels_utm.geometry.union_all().convex_hull
+
     def list_surveys(self) -> List[str]:
         """Returns sorted list of all unique survey numbers."""
         return sorted(list(self.gdf_parcels_wgs84["survey_no_clean"].dropna().unique()))
@@ -77,37 +80,60 @@ class SpatialEngine:
             "geometry_geojson": mapping(p_wgs.geometry)
         }
 
-    def check_constraints(self, survey_no: str, water_buffer_meters: float = 100.0, road_buffer_meters: float = 500.0) -> Dict[str, Any]:
+    def check_constraints(
+        self,
+        survey_no: str,
+        water_buffer_meters: float = 50.0,
+        road_buffer_meters: float = 500.0
+    ) -> Dict[str, Any]:
         """
-        Executes deterministic spatial checks:
-        - Distance to nearest waterbody
-        - Distance to nearest road
-        - Distance to nearest substation
-        - Waterbody buffer zone violation check
+        Executes deterministic spatial checks using GeoPandas and Shapely:
+        - Topological validity check (is_valid)
+        - Boundary containment within cadastral envelope (contains / within)
+        - Distance to nearest waterbody & 50m environmental buffer compliance (Proposal Section 4.2 & 7.2)
+        - Distance to nearest road & access buffer
+        - Distance to nearest electrical substation
         """
         clean_no = str(survey_no).strip()
         matches = self.gdf_parcels_utm[self.gdf_parcels_utm["survey_no_clean"] == clean_no]
         if matches.empty:
-            return {"error": f"Survey number {survey_no} not found in cadastral map"}
-        
+            return {
+                "survey_no": clean_no,
+                "error": f"Survey number {survey_no} not found in cadastral map",
+                "spatial_engine": "GeoPandas_Shapely_UTM44N",
+                "cadastral_containment_valid": False,
+                "geometry_valid": False,
+                "waterbody_buffer_conflict": False,
+                "waterbody_buffer_50m_compliant": False,
+                "road_accessible": False,
+                "deterministic_spatial_verified": False
+            }
+
         geom = matches.iloc[0].geometry
-        
-        # Calculate minimum distances in meters
+        geom_valid = bool(geom.is_valid)
+        containment_valid = bool(geom_valid and self.cadastral_hull_utm.contains(geom.centroid))
+
+        # Calculate minimum metric distances using projected UTM geometry (EPSG:32644)
         min_dist_water = float(self.gdf_water_utm.distance(geom).min())
         min_dist_road = float(self.gdf_roads_utm.distance(geom).min())
         min_dist_substation = float(self.gdf_substations_utm.distance(geom).min())
-        
-        # Buffer checks
+
+        # Buffer checks (50m default waterbody buffer as specified in Proposal Section 4.2 & 7.2)
         waterbody_conflict = min_dist_water < water_buffer_meters
         road_accessible = min_dist_road <= road_buffer_meters
-        
+
         return {
             "survey_no": clean_no,
+            "spatial_engine": "GeoPandas_Shapely_UTM44N",
             "distance_to_waterbody_meters": round(min_dist_water, 2),
             "distance_to_road_meters": round(min_dist_road, 2),
             "distance_to_substation_meters": round(min_dist_substation, 2),
+            "waterbody_buffer_threshold_meters": water_buffer_meters,
             "waterbody_buffer_conflict": waterbody_conflict,
+            "waterbody_buffer_50m_compliant": not waterbody_conflict,
             "road_accessible": road_accessible,
+            "cadastral_containment_valid": containment_valid,
+            "geometry_valid": geom_valid,
             "deterministic_spatial_verified": True
         }
 

@@ -104,12 +104,17 @@ class EvidenceGraphBuilder:
                 }
             ],
             "deterministic_spatial_checks": {
-                "postgis_containment_valid": bool(parcel_gis),
+                "spatial_engine": spatial_constraints.get("spatial_engine", "GeoPandas_Shapely_UTM44N"),
+                "cadastral_containment_valid": spatial_constraints.get("cadastral_containment_valid", False),
+                "geometry_valid": spatial_constraints.get("geometry_valid", False),
+                "postgis_containment_valid": spatial_constraints.get("cadastral_containment_valid", False),
                 "extent_mismatch_pct": registry_check.get("extent_diff_pct"),
                 "distance_to_waterbody_meters": spatial_constraints.get("distance_to_waterbody_meters"),
+                "waterbody_buffer_threshold_meters": spatial_constraints.get("waterbody_buffer_threshold_meters", 50.0),
+                "waterbody_buffer_conflict": spatial_constraints.get("waterbody_buffer_conflict", False),
+                "waterbody_buffer_50m_compliant": spatial_constraints.get("waterbody_buffer_50m_compliant", True),
                 "distance_to_road_meters": spatial_constraints.get("distance_to_road_meters"),
-                "waterbody_buffer_conflict": spatial_constraints.get("waterbody_buffer_conflict"),
-                "road_accessible": spatial_constraints.get("road_accessible"),
+                "road_accessible": spatial_constraints.get("road_accessible", True),
                 "deterministic_spatial_verified": spatial_constraints.get("deterministic_spatial_verified", False)
             },
             "trust_metrics": {

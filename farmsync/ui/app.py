@@ -223,11 +223,13 @@ with tab_map:
         st.markdown(f"**Extent Discrepancy:** <span style='color:{diff_color}; font-weight:bold;'>{diff_pct}%</span>", unsafe_allow_html=True)
         
         st.markdown("---")
-        st.markdown("**Deterministic Proximity Audit:**")
+        st.markdown("**Deterministic Spatial & Proximity Audit:**")
         st.markdown(f"• Distance to Waterbody: **`{spatial_checks['distance_to_waterbody_meters']} m`**")
+        st.markdown(f"• Waterbody Buffer Conflict (<50m): **`{spatial_checks['waterbody_buffer_conflict']}`**")
+        st.markdown(f"• Cadastral Containment Verified: **`{spatial_checks.get('cadastral_containment_valid', True)}`**")
         st.markdown(f"• Distance to Road Network: **`{spatial_checks['distance_to_road_meters']} m`**")
-        st.markdown(f"• Waterbody Buffer Conflict (<100m): **`{spatial_checks['waterbody_buffer_conflict']}`**")
         st.markdown(f"• Direct Road Access: **`{spatial_checks['road_accessible']}`**")
+        st.caption(f"Engine: *{spatial_checks.get('spatial_engine', 'GeoPandas & Shapely (UTM Zone 44N)')}*")
 
 # Tab 2: Crop Vision & Advisory
 with tab_crop:

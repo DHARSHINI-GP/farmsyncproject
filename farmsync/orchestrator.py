@@ -271,7 +271,12 @@ class FarmSyncOrchestrator:
                 spatial_constraints = {
                     "survey_no": target_survey,
                     "error": f"Survey number {target_survey} not found in cadastral GeoJSON",
+                    "spatial_engine": "GeoPandas_Shapely_UTM44N",
+                    "cadastral_containment_valid": False,
+                    "geometry_valid": False,
+                    "waterbody_buffer_threshold_meters": 50.0,
                     "waterbody_buffer_conflict": False,
+                    "waterbody_buffer_50m_compliant": False,
                     "road_accessible": False,
                     "deterministic_spatial_verified": False
                 }
