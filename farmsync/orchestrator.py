@@ -21,7 +21,7 @@ class FarmSyncOrchestrator:
     3. Mathematical Verified-Utility routing for every subtask node
     4. Real PDF document table & OCR parsing
     5. Cadastral registry cross-checking
-    6. Deterministic PostGIS spatial calculations & buffer checks
+    6. Deterministic GeoPandas/Shapely spatial calculations & buffer checks
     7. Field photo perception with PyTorch student model inference
     8. Dynamic teacher VLM escalation based on measured confidence
     9. Grounded TNAU/ICAR agronomy knowledge retrieval
@@ -179,7 +179,7 @@ class FarmSyncOrchestrator:
         # Step 6: Head-to-head Baseline Benchmarking Matrix
         baseline_comparison = {
             "FARMSYNC": {
-                "architecture": "Verified-Utility Router + Deterministic PostGIS + FTS Trust Engine",
+                "architecture": "Verified-Utility Router + Deterministic GeoPandas/Shapely GIS + FTS Trust Engine",
                 "cost_usd": round(total_cost, 5),
                 "latency_ms": total_latency_ms,
                 "verified_accuracy_pct": 100.0 if trust_result.get("decision") == "ACCEPT" else (70.0 if trust_result.get("decision") == "ESCALATE" else 0.0),

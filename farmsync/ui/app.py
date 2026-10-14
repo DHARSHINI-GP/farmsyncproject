@@ -346,7 +346,7 @@ with tab_baselines:
     ]
     st.table(pd.DataFrame(b_data))
     
-    st.success("✅ **Key Takeaway for Evaluators**: FARMSYNC delivers **>88% cost reduction** and **~80% latency reduction** compared to pure commercial models, while eliminating 100% of spatial hallucinations through deterministic PostGIS tooling!")
+    st.success("✅ **Key Takeaway for Evaluators**: FARMSYNC delivers **>88% cost reduction** and **~80% latency reduction** compared to pure commercial models, while eliminating 100% of spatial hallucinations through deterministic GeoPandas/Shapely GIS tooling!")
 
 # Tab 6: JSON Output
 with tab_json:
