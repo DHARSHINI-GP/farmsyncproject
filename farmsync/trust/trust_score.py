@@ -121,7 +121,7 @@ class TrustEngine:
         consistency_score = 0.95 if doc_registry_match else 0.10
 
         # 4. Deterministic Validation Signal (D_val)
-        # PostGIS geometric area delta and spatial topology verification (< 0.1% delta benchmark)
+        # GeoPandas/Shapely geometric area delta and spatial topology verification (< 0.1% delta benchmark)
         det_val_score = 0.98 if spatial_extent_match else 0.20
 
         # 5. Output Validity Signal (O_val)

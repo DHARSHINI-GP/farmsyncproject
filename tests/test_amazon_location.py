@@ -68,6 +68,10 @@ class TestStatus:
         assert status["connected"] is True
         assert "ap-south-1" in status["tier"]
 
+    def test_tls_verification_enabled(self, engine_no_aws):
+        status = engine_no_aws.get_status()
+        assert status["tls_verification_enabled"] is True
+
 
 # ---------------------------------------------------------------------------
 # 2) Reverse Geocode – local fallback

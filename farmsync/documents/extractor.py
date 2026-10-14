@@ -63,7 +63,7 @@ class DocumentRegistryEngine:
                     "block_id": str(row.get("block_id", "")),
                     "registered_extent_acres": area_acres,
                     "registered_extent_sqm": round(area_sqm, 2),
-                    "official_registry_source": "Park_Cadastral_Map.geojson (PostGIS UTM 44N)",
+                    "official_registry_source": "Park_Cadastral_Map.geojson (GeoPandas UTM 44N)",
                     "acquisition_status": "Cadastral Layer Verified"
                 }
         except Exception as e:

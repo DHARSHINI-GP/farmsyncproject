@@ -80,15 +80,15 @@ class AmazonLocationServiceEngine:
             return
 
         try:
-            import urllib3
-            urllib3.disable_warnings()
+            ca_bundle = os.environ.get("AWS_CA_BUNDLE")
+            verify_opt = ca_bundle if ca_bundle else (os.environ.get("AWS_SSL_VERIFY", "true").lower() != "false")
             self.client = boto3.client(
                 "location",
                 region_name=self.region,
                 aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
                 aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
                 aws_session_token=os.environ.get("AWS_SESSION_TOKEN"),
-                verify=False,
+                verify=verify_opt,
             )
         except Exception as exc:
             print(f"[AmazonLocationServiceEngine] client init failed: {exc}")
@@ -144,6 +144,7 @@ class AmazonLocationServiceEngine:
                     "note": "Geofence audit always uses local SpatialEngine regardless of AWS status",
                 },
             },
+            "tls_verification_enabled": os.environ.get("AWS_SSL_VERIFY", "true").lower() != "false",
         }
 
     # ------------------------------------------------------------------

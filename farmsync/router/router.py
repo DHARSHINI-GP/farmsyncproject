@@ -9,7 +9,7 @@ class CapabilityRegistry:
         "GEOSPATIAL_GIS": {
             "candidates": [
                 {
-                    "route": "PostGIS_GeoPandas_Engine",
+                    "route": "GeoPandas_Shapely_Engine",
                     "type": "DETERMINISTIC_TOOL",
                     "cost_per_call": 0.0000,
                     "typical_latency_ms": 45,
@@ -29,7 +29,7 @@ class CapabilityRegistry:
                     "rationale": "Commercial LLMs suffer from geometric hallucination and high token costs for spatial math."
                 }
             ],
-            "default_route": "PostGIS_GeoPandas_Engine"
+            "default_route": "GeoPandas_Shapely_Engine"
         },
         "DATABASE_JOIN": {
             "candidates": [

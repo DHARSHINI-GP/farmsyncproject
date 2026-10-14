@@ -45,13 +45,13 @@ def test_verified_utility_formula_exact():
 
 def test_deterministic_spatial_wins_over_llm():
     """
-    Validates that PostGIS deterministic engine mathematically defeats LLM spatial reasoning
+    Validates that GeoPandas/Shapely deterministic engine mathematically defeats LLM spatial reasoning
     due to zero cost, minimal latency, and zero hallucination risk.
     """
     router = VerifiedUtilityRouter()
     decision = router.select_optimal_route("GEOSPATIAL_GIS")
     
-    assert decision["selected_route"] == "PostGIS_GeoPandas_Engine"
+    assert decision["selected_route"] == "GeoPandas_Shapely_Engine"
     assert decision["route_type"] == "DETERMINISTIC_TOOL"
     assert decision["route_score"] > 1.2  # High utility
     
