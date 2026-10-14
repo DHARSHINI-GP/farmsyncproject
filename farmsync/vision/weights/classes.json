@@ -1,0 +1,27 @@
+{
+  "crop_classes": [
+    "Rice (Paddy)",
+    "Coconut",
+    "Maize",
+    "Sugarcane",
+    "Banana",
+    "Sorghum",
+    "Cassava",
+    "Marigold",
+    "Cotton",
+    "Groundnut",
+    "Mango"
+  ],
+  "stage_classes": [
+    "vegetation",
+    "full_growth",
+    "sown",
+    "harvesting",
+    "flowering"
+  ],
+  "best_val_crop_accuracy_pct": 94.73,
+  "total_training_samples": 3031,
+  "backbone": "mobilenet_v3_small",
+  "feature_dim": 576,
+  "trained_timestamp": "2026-10-14 21:01:45"
+}

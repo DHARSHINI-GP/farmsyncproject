@@ -45,3 +45,6 @@ Thumbs.db
 *.log
 .system_generated/
 scratch/
+Uploads/
+**/Uploads/
+

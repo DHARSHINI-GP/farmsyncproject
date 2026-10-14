@@ -419,10 +419,15 @@
                 </span>
                 <span id="photoBadge" class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md text-[10px]">Coconut · full_growth</span>
               </div>
-              <div class="w-full h-32 bg-slate-200 rounded-xl overflow-hidden relative border border-slate-200">
-                <img id="fieldPhotoImg" src="/api/image/default" alt="Field Photo" class="w-full h-full object-cover">
-                <div class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-xs text-white px-2 py-0.5 rounded text-[10px] font-mono">
-                  GPS: 8.780888°N, 78.026997°E
+              <div class="w-full h-32 bg-slate-100 rounded-xl overflow-hidden relative border border-slate-200 flex items-center justify-center">
+                <img id="fieldPhotoImg" src="" alt="Field Photo" class="w-full h-full object-cover">
+                <div id="noPhotoPlaceholder" class="hidden flex flex-col items-center justify-center text-slate-500 p-3 text-center">
+                  <i data-lucide="camera-off" class="w-5 h-5 text-slate-400 mb-1"></i>
+                  <span class="text-[11px] font-semibold text-slate-700">No Mobile Photo on Record</span>
+                  <span class="text-[9px] text-slate-400">Refuse-to-Substitute: Zero fake image placeholders</span>
+                </div>
+                <div id="photoGpsBadge" class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-xs text-white px-2 py-0.5 rounded text-[10px] font-mono">
+                  GPS: Ground Truth Point
                 </div>
               </div>
             </div>
@@ -1106,10 +1111,23 @@
         const adv = res.advisory_recommendation;
         const vobj = res.verified_result_object;
 
+        const photoImg = document.getElementById('fieldPhotoImg');
+        const photoPlaceholder = document.getElementById('noPhotoPlaceholder');
+        const photoBadge = document.getElementById('photoBadge');
+
         if (vobj.source_evidence && vobj.source_evidence[2] && vobj.source_evidence[2].source_ref) {
-          document.getElementById('fieldPhotoImg').src = '/api/image/' + vobj.source_evidence[2].source_ref;
+          photoImg.src = '/api/image/' + vobj.source_evidence[2].source_ref;
+          photoImg.classList.remove('hidden');
+          photoPlaceholder.classList.add('hidden');
+          photoBadge.innerText = `${attrs.predicted_crop} · ${attrs.growth_stage}`;
+          photoBadge.className = "bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md text-[10px]";
+        } else {
+          photoImg.src = '';
+          photoImg.classList.add('hidden');
+          photoPlaceholder.classList.remove('hidden');
+          photoBadge.innerText = "No Mobile Photo (Abstained)";
+          photoBadge.className = "bg-rose-100 text-rose-800 font-semibold px-2 py-0.5 rounded-md text-[10px]";
         }
-        document.getElementById('photoBadge').innerText = `${attrs.predicted_crop} · ${attrs.growth_stage}`;
         document.getElementById('advisoryTitle').innerText = adv.advisory_title || "Agronomy Advisory";
         document.getElementById('advisoryBody').innerText = adv.fertilizer_schedule;
         document.getElementById('advisoryCitation').innerText = adv.citation_source;

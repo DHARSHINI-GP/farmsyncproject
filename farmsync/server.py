@@ -315,15 +315,15 @@ async def run_orchestration(req: OrchestrateRequest):
 
 @app.get("/api/image/{filename}")
 async def get_image(filename: str):
-    """Serves real field crop photo."""
+    """Serves real field crop photo. Strictly refuses to return unrelated fallback photos."""
+    if not filename or filename.lower() in ["none", "null", "undefined", "default"]:
+        raise HTTPException(status_code=404, detail="No field photo on record for parcel")
+
     img_path = os.path.join(IMAGES_DIR, filename)
     if os.path.exists(img_path):
         return FileResponse(img_path, media_type="image/jpeg")
-    # Return first available image as fallback
-    all_imgs = os.listdir(IMAGES_DIR)
-    if all_imgs:
-        return FileResponse(os.path.join(IMAGES_DIR, all_imgs[0]), media_type="image/jpeg")
-    raise HTTPException(status_code=404, detail="Image not found")
+
+    raise HTTPException(status_code=404, detail=f"Field photo '{filename}' not found on disk")
 
 @app.get("/api/status")
 async def get_system_status():
