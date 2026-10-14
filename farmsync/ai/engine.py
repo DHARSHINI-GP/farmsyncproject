@@ -97,12 +97,13 @@ class AIAssistantEngine:
         self,
         query: str,
         survey_no: Optional[str] = None,
+        document_path: Optional[str] = None,
         force_escalate: bool = False,
         simulate_conflict: bool = False
     ) -> Dict[str, Any]:
         """
         Executes end-to-end AI reasoning over the query:
-        1. Entity and intent extraction
+        1. Entity and intent extraction (survey number, document)
         2. Execution of deterministic geospatial, document, and vision tools
         3. Dynamic LLM / Bedrock synthesis or local CoT reasoning
         4. Structured output generation with grounding citations
@@ -111,12 +112,14 @@ class AIAssistantEngine:
 
         # Step 1: Detect Survey Number from query or use selected survey
         survey_match = re.search(r'survey\s*(?:number|no\.?|#)?\s*([0-9]+(?:/[0-9]+[A-Za-z]*)?)', query, re.IGNORECASE)
-        target_survey = survey_match.group(1) if survey_match else (survey_no or "384")
+        target_survey = survey_no or (survey_match.group(1) if survey_match else "384")
 
         # Step 2: Execute Orchestrator for Ground Truth Tools
         effective_query = f"Analyze Survey Number {target_survey} in Keelathattaparai village: {query}"
         orch_res = self.orchestrator.execute_request(
             query=effective_query,
+            document_path=document_path,
+            survey_no=target_survey,
             force_escalate_vision=force_escalate,
             simulate_conflict=simulate_conflict,
             simulate_unsupported_crop=False
@@ -127,10 +130,19 @@ class AIAssistantEngine:
         attrs = vobj["extracted_attributes"]
         adv = vobj["advisory_recommendation"]
         gis = vobj["deterministic_spatial_checks"]
+        doc_src = attrs.get("document_source")
+        doc_found = bool(attrs.get("document_found", False))
+        doc_evidence = next((e for e in vobj.get("source_evidence", []) if e.get("source_type") == "DOCUMENT_OCR"), {})
+        page_num = doc_evidence.get("page_number", 1)
+
         doc = {
-            "claimed_extent_acres": attrs.get("documented_area_acres", 10.35),
-            "claimed_owner": attrs.get("registered_owner", "Landholder"),
-            "verification_status": "MATCH" if (attrs.get("extent_difference_pct", 0) or 0) < 5.0 else "MISMATCH"
+            "found": doc_found,
+            "document_name": doc_src or "Official Gazette Notice",
+            "page_number": page_num,
+            "page_count": 1,
+            "claimed_extent_acres": attrs.get("documented_area_acres"),
+            "claimed_owner": attrs.get("document_owner") or attrs.get("registered_owner", "UNVERIFIED"),
+            "verification_status": "MATCH" if (doc_found and attrs.get("extent_difference_pct") is not None and attrs.get("extent_difference_pct") <= 5.0) else ("ABSENT" if not doc_found else "MISMATCH")
         }
         routing = vobj["routing_telemetry"]
 
@@ -262,19 +274,31 @@ Provide a concise, professional executive answer covering:
         
         paragraphs = []
         
+        found_in_doc = doc.get("found", False)
+        claimed_owner = doc.get("claimed_owner") or "Unspecified Claimant"
+        claimed_extent = doc.get("claimed_extent_acres")
+        doc_name = doc.get("document_name") or "Land Acquisition Notice"
+
         # Section 1: Executive Audit Summary
-        if not is_conflict:
+        if not found_in_doc:
+            paragraphs.append(
+                f"### Executive Summary: Survey Missing From Document (Abstained)\n"
+                f"Survey Number **{survey_no}** in Keelathattaparai village was audited against `{doc_name}`. "
+                f"The survey number was **not recorded in this document** (audited across {doc.get('page_count', 1)} pages). "
+                f"Under the enterprise *Refuse-to-Invent* governance protocol, the system strictly issues `VERIFIED_ABSTAIN` rather than fabricating ownership or extent records."
+            )
+        elif not is_conflict:
             paragraphs.append(
                 f"### Executive Summary: Parcel Verified & Accepted\n"
                 f"Survey Number **{survey_no}** in Keelathattaparai village has undergone full multimodal verification. "
-                f"The cadastral boundary corresponds exactly to **{gis_area} Acres** as claimed in legal documentation by **{doc['claimed_owner']}**. "
+                f"The cadastral boundary corresponds exactly to **{gis_area} Acres** as claimed in legal documentation (`{doc_name}`, Page {doc.get('page_number', '1')}) by **{claimed_owner}**. "
                 f"No environmental or waterbody buffer encroachments were detected (clearance: **{dist_water:.1f} m**)."
             )
         else:
             paragraphs.append(
                 f"### Executive Summary: Audit Discrepancy Flagged\n"
                 f"Survey Number **{survey_no}** in Keelathattaparai village exhibits an evidence conflict. "
-                f"GIS computed extent is **{gis_area} Acres** versus documented claim of **{doc['claimed_extent_acres']} Acres** "
+                f"GIS computed extent is **{gis_area} Acres** versus documented claim of **{claimed_extent} Acres** in `{doc_name}` "
                 f"({'Boundary Extent Mismatch' if doc['verification_status'] != 'MATCH' else 'Waterbody Buffer Conflict'}). "
                 f"The request has been routed for regulatory audit under the *Refuse-to-Invent* protocol."
             )

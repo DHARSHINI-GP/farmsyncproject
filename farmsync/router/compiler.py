@@ -29,14 +29,18 @@ class TaskGraphCompiler:
     def compile(self, query: str) -> Dict[str, Any]:
         """
         Compiles user query into a typed task DAG.
-        Extracts key entities (survey number, village, intent) with fallback protection.
+        Extracts key entities (survey number, village, document name, intent) without fabrication.
         """
         # Entity extraction via regex patterns
         survey_match = re.search(r'survey\s*(?:number|no\.?|#)?\s*([0-9]+(?:/[0-9]+[A-Za-z]*)?)', query, re.IGNORECASE)
-        survey_no = survey_match.group(1) if survey_match else "384"
+        survey_no = survey_match.group(1) if survey_match else None
         
         village_match = re.search(r'village\s+([A-Za-z]+)', query, re.IGNORECASE)
         village = village_match.group(1) if village_match else "Keelathattaparai"
+
+        # Document filename extraction (e.g. 36_Ex_VI_1_2025__1___1_.pdf, 31Published_Gazette_Block_1.pdf, etc.)
+        doc_match = re.search(r'([A-Za-z0-9_\-\(\)\s]+\.pdf)', query, re.IGNORECASE)
+        target_doc = doc_match.group(1).strip() if doc_match else None
 
         # Detect intent
         is_discrepancy = any(k in query.lower() for k in ["discrepancy", "unmatched", "extent difference", "acquisition progress"])
@@ -55,8 +59,10 @@ class TaskGraphCompiler:
 
         return {
             "workflow_type": workflow_type,
-            "target_survey_no": survey_no,
+            "target_survey_no": survey_no or "384",
+            "explicit_survey_provided": survey_no is not None,
             "target_village": village,
+            "target_document": target_doc,
             "subtasks": template,
             "is_dynamic_dag": True,
             "fallback_template_active": False

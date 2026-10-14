@@ -264,23 +264,42 @@
             </button>
           </div>
 
-          <!-- Quick Suggestion Prompt Chips -->
-          <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar pointer-events-auto pl-1">
-            <button onclick="quickPrompt('Inspect Survey 384 and verify crop health')" class="glass-card hover:bg-white text-slate-700 px-3 py-1 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
-              <span class="text-brand-600">⚡</span>
+          <!-- Document Selector & Quick Prompts Row -->
+          <div class="flex items-center space-x-2 pointer-events-auto overflow-x-auto no-scrollbar">
+            <!-- Document Picker Pill -->
+            <div class="glass-card px-3 py-1.5 rounded-full border border-white/80 shadow-md flex items-center space-x-1.5 shrink-0 text-xs">
+              <i data-lucide="file-text" class="w-3.5 h-3.5 text-amber-600 shrink-0"></i>
+              <span class="font-bold text-slate-700 text-[10px] uppercase tracking-wider shrink-0">Notice:</span>
+              <select id="docSelectDropdown" class="bg-transparent font-medium text-slate-800 focus:outline-none text-xs max-w-[210px] truncate cursor-pointer">
+                <option value="">Auto-Detect (71 Official PDFs)</option>
+              </select>
+              <button onclick="document.getElementById('pdfUploadInput').click()" class="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-full text-[10px] font-bold transition flex items-center space-x-1 shrink-0" title="Upload Custom Land Acquisition PDF">
+                <i data-lucide="upload" class="w-3 h-3"></i>
+                <span>Upload</span>
+              </button>
+              <input type="file" id="pdfUploadInput" accept=".pdf" class="hidden" onchange="uploadCustomPdf(this)">
+            </div>
+
+            <!-- Quick Suggestion Prompt Chips -->
+            <button onclick="quickPrompt('Audit Survey 1/3B against Unit 9 Gazette (36_Ex_VI_1_2025__1___1_.pdf)')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
+              <span class="text-emerald-600 font-bold">✓</span>
+              <span>Survey 1/3B (Unit 9 Gazette)</span>
+            </button>
+            <button onclick="quickPrompt('Audit Survey 84/4 against Gazette Block 1 (31Published_Gazette_Block_1.pdf)')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
+              <span class="text-emerald-600 font-bold">✓</span>
+              <span>Survey 84/4 (Block 1 Gazette)</span>
+            </button>
+            <button onclick="quickPrompt('Audit Survey 384 against Unit 9 Gazette (36_Ex_VI_1_2025__1___1_.pdf)')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0" title="Demonstrates Refuse-to-Invent policy">
+              <span class="text-rose-500 font-bold">🛡️</span>
+              <span>Survey 384 (Refuse-to-Invent)</span>
+            </button>
+            <button onclick="quickPrompt('Audit Survey 176 for extent mismatch and legal conflict')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
+              <span class="text-amber-500 font-bold">⚠</span>
+              <span>Survey 176 Conflict</span>
+            </button>
+            <button onclick="quickPrompt('Inspect Survey 384 and verify crop health')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
+              <span class="text-brand-600 font-bold">⚡</span>
               <span>Inspect Survey 384</span>
-            </button>
-            <button onclick="quickPrompt('Audit Survey 176 for extent mismatch and legal conflict')" class="glass-card hover:bg-white text-slate-700 px-3 py-1 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
-              <span class="text-rose-500">⚡</span>
-              <span>Audit Survey 176 Conflict</span>
-            </button>
-            <button onclick="quickPrompt('Check environmental waterbody buffer clearance for Survey 382')" class="glass-card hover:bg-white text-slate-700 px-3 py-1 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
-              <span class="text-amber-500">⚡</span>
-              <span>Waterbody Buffer Check 382</span>
-            </button>
-            <button onclick="quickPrompt('Recommend TNAU fertilizer schedule for Sugarcane in Survey 387')" class="glass-card hover:bg-white text-slate-700 px-3 py-1 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
-              <span class="text-emerald-600">⚡</span>
-              <span>Sugarcane Advisory 387</span>
             </button>
           </div>
         </div>
@@ -446,6 +465,36 @@
               </div>
             </div>
 
+            <!-- Official Land Acquisition Document & OCR Audit Card -->
+            <div class="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 flex items-center space-x-1.5">
+                  <i data-lucide="file-check-2" class="w-3.5 h-3.5 text-amber-600"></i>
+                  <span>Land Acquisition Notice Claim</span>
+                </span>
+                <span id="docStatusBadge" class="text-[9px] bg-amber-100 text-amber-900 font-mono px-2 py-0.5 rounded font-bold">PDF Table Extracted</span>
+              </div>
+
+              <div class="bg-white p-2.5 rounded-xl border border-slate-100 text-[11px] space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Legal Document</span>
+                  <span id="docFilenameText" class="font-mono text-[10px] text-slate-700 truncate max-w-[190px]" title="Document Name">Auto-Detected</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-500">Pattadar / Claimant:</span>
+                  <span id="docOwnerText" class="font-bold text-slate-900 truncate max-w-[190px]">Pearl Manisha Infra Structure</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-500">Notice Gazette Stage:</span>
+                  <span id="docStageText" class="font-medium text-slate-800">Section 3(1) Gazette</span>
+                </div>
+                <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px]">
+                  <span>Claimed Extent: <b id="docClaimedExtentText" class="text-slate-800">1.00 ac</b></span>
+                  <span>Discrepancy: <b id="docVarianceText" class="text-emerald-600">0.0% (MATCH)</b></span>
+                </div>
+              </div>
+            </div>
+
             <!-- Deterministic GIS Metrics Box -->
             <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 space-y-2">
               <div class="font-bold text-slate-800 flex items-center justify-between">
@@ -585,6 +634,7 @@
       initMap();
       loadAllParcelsData();
       checkAwsStatus();
+      loadAvailableDocuments();
     });
 
     function initMap() {
@@ -939,9 +989,11 @@
       `;
       lucide.createIcons();
 
+      const selectedDoc = document.getElementById('docSelectDropdown') ? document.getElementById('docSelectDropdown').value : "";
       const payload = {
         query: query,
         survey_no: currentSurvey,
+        document_path: selectedDoc || undefined,
         force_escalate: document.getElementById('simEscalate').checked,
         simulate_conflict: document.getElementById('simConflict').checked
       };
@@ -997,6 +1049,58 @@
           dBadge.className = "px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-100 text-rose-800";
         }
 
+        // Update Document Audit Card & Extent Metrics
+        if (res.document_verification) {
+          const doc = res.document_verification;
+          const fnElem = document.getElementById('docFilenameText');
+          if (fnElem) {
+            fnElem.innerText = doc.document_name || "Auto-Detected";
+            fnElem.title = doc.relative_path || doc.document_name || "";
+          }
+          
+          const ownElem = document.getElementById('docOwnerText');
+          const stgElem = document.getElementById('docStageText');
+          const extElem = document.getElementById('docClaimedExtentText');
+          const docArea = document.getElementById('docAreaText');
+          const badge = document.getElementById('docStatusBadge');
+          const varElem = document.getElementById('docVarianceText');
+
+          if (doc.found) {
+            if (ownElem) ownElem.innerText = doc.claimed_owner || "Verified Landholder";
+            if (stgElem) stgElem.innerText = doc.gazette_section || "Land Acquisition Notice";
+            if (extElem) extElem.innerText = `${doc.claimed_extent_acres} ac (${doc.claimed_extent_hectares ? doc.claimed_extent_hectares + " ha" : "table"})`;
+            if (docArea) docArea.innerText = `${doc.claimed_extent_acres} Acres`;
+            
+            if (badge) {
+              badge.innerText = doc.source_method || "PDF TABLE";
+              badge.className = "text-[9px] bg-emerald-100 text-emerald-900 font-mono px-2 py-0.5 rounded font-bold";
+            }
+            if (varElem) {
+              if (doc.verification_status === "MATCH") {
+                varElem.innerText = `${doc.variance_pct}% (MATCH)`;
+                varElem.className = "text-emerald-600 font-bold";
+              } else {
+                varElem.innerText = `${doc.variance_pct}% (DISCREPANCY)`;
+                varElem.className = "text-rose-600 font-bold";
+              }
+            }
+          } else {
+            if (ownElem) ownElem.innerText = "Not Recorded in Notice";
+            if (stgElem) stgElem.innerText = doc.gazette_section || "Notice Audit";
+            if (extElem) extElem.innerText = "Not Recorded";
+            if (docArea) docArea.innerText = "Not Recorded";
+            
+            if (badge) {
+              badge.innerText = "REFUSE_TO_INVENT";
+              badge.className = "text-[9px] bg-rose-100 text-rose-900 font-mono px-2 py-0.5 rounded font-bold";
+            }
+            if (varElem) {
+              varElem.innerText = "ABSTAIN (Missing Record)";
+              varElem.className = "text-rose-600 font-bold";
+            }
+          }
+        }
+
         // Update Crop & Advisory
         const attrs = res.extracted_attributes;
         const adv = res.advisory_recommendation;
@@ -1028,6 +1132,67 @@
         submitBtn.innerHTML = `<span>Ask AI</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`;
         submitBtn.disabled = false;
         document.getElementById('aiAnswerContent').innerText = "AI query error: " + err;
+        lucide.createIcons();
+      });
+    }
+
+    function loadAvailableDocuments() {
+      fetch('/api/documents/list')
+        .then(r => r.json())
+        .then(data => {
+          const select = document.getElementById('docSelectDropdown');
+          if (!select) return;
+          select.innerHTML = '<option value="">Auto-Detect from Survey (71 Official PDFs)</option>';
+          
+          for (const [category, files] of Object.entries(data.documents || {})) {
+            const optGroup = document.createElement('optgroup');
+            optGroup.label = category;
+            files.forEach(f => {
+              const opt = document.createElement('option');
+              opt.value = f.relative_path;
+              opt.innerText = f.filename;
+              optGroup.appendChild(opt);
+            });
+            select.appendChild(optGroup);
+          }
+        })
+        .catch(err => console.warn("Failed loading documents list:", err));
+    }
+
+    function uploadCustomPdf(input) {
+      if (!input.files || input.files.length === 0) return;
+      const file = input.files[0];
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const submitBtn = document.getElementById('aiSubmitBtn');
+      submitBtn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Uploading...</span>`;
+      submitBtn.disabled = true;
+
+      fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(r => r.json())
+      .then(data => {
+        const select = document.getElementById('docSelectDropdown');
+        const opt = document.createElement('option');
+        opt.value = data.filename;
+        opt.innerText = `[Uploaded] ${data.filename}`;
+        select.prepend(opt);
+        select.value = data.filename;
+        
+        submitBtn.innerHTML = `<span>Ask AI</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`;
+        submitBtn.disabled = false;
+        lucide.createIcons();
+
+        // Run audit on uploaded file
+        executeAiQuery(`Audit Survey ${currentSurvey} against uploaded document ${data.filename}`);
+      })
+      .catch(err => {
+        alert("Upload error: " + err);
+        submitBtn.innerHTML = `<span>Ask AI</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`;
+        submitBtn.disabled = false;
         lucide.createIcons();
       });
     }

@@ -1,14 +1,8 @@
 from typing import Dict, Any, List
 
-class VerifiedUtilityRouter:
-    """
-    Verified-Utility Router for FARMSYNC.
-    Selects model or deterministic tool for each subtask by maximizing:
-    RouteScore = Quality - lambda*Cost - mu*Latency - rho*FailureRisk + eta*VerificationGain
-    """
-    
-    # Model & Tool Capability Registry
-    CAPABILITY_REGISTRY = {
+class CapabilityRegistry:
+    """Registry maintaining capability, cost, latency, and quality profiles of models & tools."""
+    REGISTRY = {
         "GEOSPATIAL_GIS": {
             "default_route": "PostGIS_GeoPandas_Engine",
             "type": "DETERMINISTIC_TOOL",
@@ -28,13 +22,13 @@ class VerifiedUtilityRouter:
             "rationale": "Direct primary-key lookup in registry DB guarantees zero extraction hallucination."
         },
         "DOCUMENT_OCR": {
-            "default_route": "PaddleOCR_v4_Specialized",
+            "default_route": "pdfplumber_Table_OCR_Extractor",
             "type": "SPECIALIZED_MODEL",
             "cost_per_call": 0.0002,
             "typical_latency_ms": 120,
-            "quality_score": 0.94,
-            "failure_risk": 0.05,
-            "rationale": "Lightweight specialized OCR achieves high extraction quality at <1% cost of full multimodal LLM."
+            "quality_score": 0.96,
+            "failure_risk": 0.03,
+            "rationale": "High-precision PDF schedule parser and OCR extracts verifiable survey tables without hallucination."
         },
         "VISION_STUDENT": {
             "default_route": "Qwen2.5-VL-7B-Student",
@@ -74,11 +68,28 @@ class VerifiedUtilityRouter:
         }
     }
 
+    def get_spec(self, subtask_type: str) -> Dict[str, Any]:
+        return self.REGISTRY.get(subtask_type, self.REGISTRY["TRUST_SYNTHESIS"])
+
+
+class VerifiedUtilityRouter:
+    """
+    Verified-Utility Router for FARMSYNC.
+    Selects model or deterministic tool for each subtask by maximizing:
+    RouteScore = Quality - lambda*Cost - mu*Latency - rho*FailureRisk + eta*VerificationGain
+    """
+    def __init__(self, registry: Any = None):
+        if isinstance(registry, CapabilityRegistry):
+            self.registry = registry
+        else:
+            self.registry = CapabilityRegistry()
+        self.CAPABILITY_REGISTRY = self.registry.REGISTRY
+
     def route_subtask(self, subtask_type: str, force_escalation: bool = False) -> Dict[str, Any]:
         """
         Determines the optimal route, logs rationale, cost, and expected latency.
         """
-        spec = self.CAPABILITY_REGISTRY.get(subtask_type, self.CAPABILITY_REGISTRY["TRUST_SYNTHESIS"])
+        spec = self.registry.get_spec(subtask_type)
         
         selected_route = spec["default_route"]
         cost = spec["cost_per_call"]

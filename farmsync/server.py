@@ -2,8 +2,8 @@ import os
 import json
 from dotenv import load_dotenv
 load_dotenv()
-from typing import Dict, Any, Optional
-from fastapi import FastAPI, HTTPException
+from typing import Dict, Any, Optional, List
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,7 +53,8 @@ STATUS_MAP = {
 
 class OrchestrateRequest(BaseModel):
     query: str
-    survey_no: Optional[str] = "384"
+    survey_no: Optional[str] = None
+    document_path: Optional[str] = None
     force_escalate: Optional[bool] = False
     simulate_conflict: Optional[bool] = False
     simulate_ood: Optional[bool] = False
@@ -61,6 +62,7 @@ class OrchestrateRequest(BaseModel):
 class AIQueryRequest(BaseModel):
     query: str
     survey_no: Optional[str] = None
+    document_path: Optional[str] = None
     force_escalate: Optional[bool] = False
     simulate_conflict: Optional[bool] = False
 
@@ -193,12 +195,52 @@ async def run_ai_query(req: AIQueryRequest):
         res = ai_engine.process_query(
             query=req.query,
             survey_no=req.survey_no,
+            document_path=req.document_path,
             force_escalate=req.force_escalate or False,
             simulate_conflict=req.simulate_conflict or False
         )
         return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/documents/list")
+async def list_available_documents():
+    """Lists official government land acquisition documents available for real extraction."""
+    docs_dir = os.path.join(GEO_DIR.replace("Geospatial_Layer", "Land_documents"))
+    categorized = {}
+    if os.path.exists(docs_dir):
+        for root, dirs, files in os.walk(docs_dir):
+            for f in files:
+                if f.lower().endswith(".pdf"):
+                    rel = os.path.relpath(os.path.join(root, f), docs_dir)
+                    cat = os.path.dirname(rel) or "General"
+                    categorized.setdefault(cat, []).append({
+                        "filename": f,
+                        "relative_path": rel,
+                        "size_bytes": os.path.getsize(os.path.join(root, f))
+                    })
+    return {"total_categories": len(categorized), "documents": categorized}
+
+@app.post("/api/documents/upload")
+async def upload_document(file: UploadFile = File(...)):
+    """Uploads a real PDF land document for extraction and analysis."""
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    
+    upload_dir = os.path.join(GEO_DIR.replace("Geospatial_Layer", "Land_documents"), "Uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    target_path = os.path.join(upload_dir, file.filename)
+    
+    content = await file.read()
+    with open(target_path, "wb") as f:
+        f.write(content)
+        
+    return {
+        "status": "UPLOAD_SUCCESS",
+        "filename": file.filename,
+        "saved_path": os.path.relpath(target_path, os.path.dirname(upload_dir)),
+        "size_bytes": len(content)
+    }
 
 @app.post("/api/settings/aws")
 async def update_aws_settings(req: AWSSettingsRequest):
@@ -256,13 +298,15 @@ async def get_geofence_status(survey_no: str):
 
 @app.post("/api/orchestrate")
 async def run_orchestration(req: OrchestrateRequest):
-    """Executes full agentic orchestration workflow."""
+    """Executes full agentic orchestration workflow without fabrication."""
     effective_query = req.query
     if req.survey_no and f"Survey {req.survey_no}" not in effective_query and f"Survey Number {req.survey_no}" not in effective_query:
         effective_query = f"Analyze Survey Number {req.survey_no} in Keelathattaparai village: {req.query}"
 
     res = orchestrator.execute_request(
         query=effective_query,
+        document_path=req.document_path,
+        survey_no=req.survey_no,
         force_escalate_vision=req.force_escalate,
         simulate_conflict=req.simulate_conflict,
         simulate_unsupported_crop=req.simulate_ood

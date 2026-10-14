@@ -128,3 +128,6 @@ class CropVisionPipeline:
             "final_confidence": 0.96 if needs_escalation else round(base_confidence, 2)
         }
         return result
+
+CropVisionClassifier = CropVisionPipeline
+

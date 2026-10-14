@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 class EvidenceGraphBuilder:
     """
@@ -10,26 +10,40 @@ class EvidenceGraphBuilder:
         self,
         survey_no: str,
         village: str,
-        parcel_gis: Dict[str, Any],
-        doc_claims: Dict[str, Any],
-        registry_check: Dict[str, Any],
-        spatial_constraints: Dict[str, Any],
-        vision_result: Dict[str, Any],
-        advisory_result: Dict[str, Any],
-        trust_result: Dict[str, Any],
-        telemetry: Dict[str, Any]
+        parcel_gis: Optional[Dict[str, Any]],
+        doc_claims: Optional[Dict[str, Any]],
+        registry_check: Optional[Dict[str, Any]],
+        spatial_constraints: Optional[Dict[str, Any]],
+        vision_result: Optional[Dict[str, Any]],
+        advisory_result: Optional[Dict[str, Any]],
+        trust_result: Optional[Dict[str, Any]],
+        telemetry: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
         Builds complete VerifiedResultObject following the schema promised in the proposal.
+        Safely handles missing documents, ungrounded parcels, or failed validations.
         """
+        parcel_gis = parcel_gis or {}
+        doc_claims = doc_claims or {}
+        registry_check = registry_check or {}
+        spatial_constraints = spatial_constraints or {}
+        vision_result = vision_result or {}
+        advisory_result = advisory_result or {}
+        trust_result = trust_result or {}
+        telemetry = telemetry or {}
+
         claim_id = f"CLM-2026-THOOTHU-{survey_no}"
+        doc_found = doc_claims.get("found", False)
         
         # Build DAG Nodes and Edges for provenance visualization
+        doc_label = f"Doc: {doc_claims.get('document_source', 'None')}" if doc_found else f"Doc: ABSENT ({doc_claims.get('document_source', 'None')})"
+        reg_owner = registry_check.get('official_owner') or (doc_claims.get('extracted_owner') if doc_found else "UNVERIFIED")
+
         nodes = [
-            {"id": "claim_root", "label": f"Survey {survey_no} Verified Claim", "type": "ROOT"},
-            {"id": "doc_node", "label": f"Doc: {doc_claims.get('document_source', 'Patta_Notice.pdf')}", "type": "EVIDENCE_DOC"},
-            {"id": "db_node", "label": f"Registry: {registry_check.get('official_owner', 'Owner')}", "type": "EVIDENCE_DB"},
-            {"id": "gis_node", "label": f"PostGIS: {parcel_gis.get('area_acres', 0)} acres", "type": "DETERMINISTIC_GIS"},
+            {"id": "claim_root", "label": f"Survey {survey_no} Claim", "type": "ROOT"},
+            {"id": "doc_node", "label": doc_label, "type": "EVIDENCE_DOC" if doc_found else "EVIDENCE_MISSING"},
+            {"id": "db_node", "label": f"Registry: {reg_owner}", "type": "EVIDENCE_DB"},
+            {"id": "gis_node", "label": f"PostGIS: {parcel_gis.get('area_acres', 'N/A')} ac", "type": "DETERMINISTIC_GIS" if parcel_gis else "GIS_MISSING"},
             {"id": "photo_node", "label": f"Photo: {vision_result.get('image_filename', 'Field.jpg')}", "type": "EVIDENCE_PHOTO"},
             {"id": "crop_node", "label": f"Crop: {vision_result.get('final_verified_crop')} ({vision_result.get('final_verified_stage')})", "type": "PERCEPTION"},
             {"id": "adv_node", "label": f"Advisory: {advisory_result.get('advisory_title')}", "type": "KNOWLEDGE_RAG"},
@@ -37,9 +51,9 @@ class EvidenceGraphBuilder:
         ]
         
         edges = [
-            {"from": "claim_root", "to": "doc_node", "relation": "extracted_from"},
+            {"from": "claim_root", "to": "doc_node", "relation": "extracted_from" if doc_found else "missing_in"},
             {"from": "claim_root", "to": "db_node", "relation": "matched_registry"},
-            {"from": "claim_root", "to": "gis_node", "relation": "polygon_verified"},
+            {"from": "claim_root", "to": "gis_node", "relation": "polygon_verified" if parcel_gis else "geometry_absent"},
             {"from": "claim_root", "to": "photo_node", "relation": "associated_field_image"},
             {"from": "photo_node", "to": "crop_node", "relation": "classified_as"},
             {"from": "crop_node", "to": "adv_node", "relation": "recommended_management"},
@@ -54,26 +68,33 @@ class EvidenceGraphBuilder:
             "village": village,
             "district": parcel_gis.get("district", "Thoothukudi"),
             "extracted_attributes": {
-                "registered_owner": registry_check.get("official_owner", doc_claims.get("extracted_owner")),
+                "registered_owner": reg_owner,
+                "document_owner": doc_claims.get("extracted_owner"),
                 "gis_area_acres": parcel_gis.get("area_acres"),
                 "documented_area_acres": doc_claims.get("claimed_extent_acres"),
                 "extent_difference_pct": registry_check.get("extent_diff_pct"),
                 "predicted_crop": vision_result.get("final_verified_crop"),
                 "growth_stage": vision_result.get("final_verified_stage"),
-                "land_classification": registry_check.get("land_classification", "Agricultural")
+                "land_classification": doc_claims.get("land_classification") or registry_check.get("land_classification", "Agricultural"),
+                "document_found": doc_found,
+                "document_source": doc_claims.get("document_source")
             },
             "source_evidence": [
                 {
                     "source_type": "DOCUMENT_OCR",
                     "source_ref": doc_claims.get("document_source"),
                     "extracted_value": doc_claims.get("extracted_owner"),
-                    "confidence": doc_claims.get("ocr_confidence")
+                    "claimed_extent_acres": doc_claims.get("claimed_extent_acres"),
+                    "page_number": doc_claims.get("page_number"),
+                    "confidence": doc_claims.get("ocr_confidence") if doc_found else 0.0,
+                    "status": "VERIFIED_EXTRACTED" if doc_found else "EVIDENCE_NOT_FOUND"
                 },
                 {
                     "source_type": "DATABASE_REGISTRY",
                     "source_ref": "Thoothukudi_Land_Registry.parcels",
-                    "extracted_value": registry_check.get("official_owner"),
-                    "confidence": 1.00
+                    "extracted_value": reg_owner,
+                    "confidence": 1.00 if registry_check.get("registry_found") else 0.0,
+                    "status": "FOUND_IN_REGISTRY" if registry_check.get("registry_found") else "REGISTRY_ABSENT"
                 },
                 {
                     "source_type": "FIELD_PHOTOGRAPH",
@@ -83,12 +104,13 @@ class EvidenceGraphBuilder:
                 }
             ],
             "deterministic_spatial_checks": {
-                "postgis_containment_valid": True,
+                "postgis_containment_valid": bool(parcel_gis),
                 "extent_mismatch_pct": registry_check.get("extent_diff_pct"),
                 "distance_to_waterbody_meters": spatial_constraints.get("distance_to_waterbody_meters"),
                 "distance_to_road_meters": spatial_constraints.get("distance_to_road_meters"),
                 "waterbody_buffer_conflict": spatial_constraints.get("waterbody_buffer_conflict"),
-                "road_accessible": spatial_constraints.get("road_accessible")
+                "road_accessible": spatial_constraints.get("road_accessible"),
+                "deterministic_spatial_verified": spatial_constraints.get("deterministic_spatial_verified", False)
             },
             "trust_metrics": {
                 "model_reported_confidence": vision_result.get("confidence"),
