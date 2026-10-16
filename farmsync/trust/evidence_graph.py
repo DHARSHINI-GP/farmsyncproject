@@ -33,21 +33,28 @@ class EvidenceGraphBuilder:
         trust_result = trust_result or {}
         telemetry = telemetry or {}
 
-        claim_id = f"CLM-2026-THOOTHU-{survey_no}"
+        claim_id = f"CLM-2026-THOOTHU-{survey_no or 'UNKNOWN'}"
         doc_found = doc_claims.get("found", False)
+        has_photo = bool(vision_result.get("has_image", False))
+        crop_name = vision_result.get("final_verified_crop") if has_photo else None
+        crop_stage = vision_result.get("final_verified_stage") if has_photo else None
         
         # Build DAG Nodes and Edges for provenance visualization
         doc_label = f"Doc: {doc_claims.get('document_source', 'None')}" if doc_found else f"Doc: ABSENT ({doc_claims.get('document_source', 'None')})"
         reg_owner = registry_check.get('official_owner') or (doc_claims.get('extracted_owner') if doc_found else "UNVERIFIED")
 
+        photo_label = f"Photo: {vision_result.get('image_filename')}" if has_photo else f"Photo: NONE on record for Survey {survey_no or 'Unspecified'}"
+        crop_label = f"Crop: {crop_name} ({crop_stage})" if crop_name else "Crop: UNVERIFIED (No Field Image)"
+        adv_title = advisory_result.get("advisory_title") or "No Grounded Advisory"
+
         nodes = [
-            {"id": "claim_root", "label": f"Survey {survey_no} Claim", "type": "ROOT"},
+            {"id": "claim_root", "label": f"Survey {survey_no or 'Unspecified'} Claim", "type": "ROOT"},
             {"id": "doc_node", "label": doc_label, "type": "EVIDENCE_DOC" if doc_found else "EVIDENCE_MISSING"},
-            {"id": "db_node", "label": f"Registry: {reg_owner}", "type": "EVIDENCE_DB"},
+            {"id": "db_node", "label": f"Registry: {reg_owner}", "type": "EVIDENCE_DB" if registry_check.get("registry_found") else "REGISTRY_ABSENT"},
             {"id": "gis_node", "label": f"GIS (Shapely): {parcel_gis.get('area_acres', 'N/A')} ac", "type": "DETERMINISTIC_GIS" if parcel_gis else "GIS_MISSING"},
-            {"id": "photo_node", "label": f"Photo: {vision_result.get('image_filename', 'Field.jpg')}", "type": "EVIDENCE_PHOTO"},
-            {"id": "crop_node", "label": f"Crop: {vision_result.get('final_verified_crop')} ({vision_result.get('final_verified_stage')})", "type": "PERCEPTION"},
-            {"id": "adv_node", "label": f"Advisory: {advisory_result.get('advisory_title')}", "type": "KNOWLEDGE_RAG"},
+            {"id": "photo_node", "label": photo_label, "type": "EVIDENCE_PHOTO" if has_photo else "PHOTO_MISSING"},
+            {"id": "crop_node", "label": crop_label, "type": "PERCEPTION" if crop_name else "PERCEPTION_UNAVAILABLE"},
+            {"id": "adv_node", "label": f"Advisory: {adv_title}", "type": "KNOWLEDGE_RAG" if advisory_result.get("source_grounded") else "ADVISORY_UNAVAILABLE"},
             {"id": "trust_node", "label": f"Trust Score: {trust_result.get('fts_score')} [{trust_result.get('decision')}]", "type": "TRUST_DECISION"}
         ]
         
@@ -55,13 +62,13 @@ class EvidenceGraphBuilder:
             {"from": "claim_root", "to": "doc_node", "relation": "extracted_from" if doc_found else "missing_in"},
             {"from": "claim_root", "to": "db_node", "relation": "matched_registry"},
             {"from": "claim_root", "to": "gis_node", "relation": "polygon_verified" if parcel_gis else "geometry_absent"},
-            {"from": "claim_root", "to": "photo_node", "relation": "associated_field_image"},
-            {"from": "photo_node", "to": "crop_node", "relation": "classified_as"},
-            {"from": "crop_node", "to": "adv_node", "relation": "recommended_management"},
+            {"from": "claim_root", "to": "photo_node", "relation": "associated_field_image" if has_photo else "photo_unrecorded"},
+            {"from": "photo_node", "to": "crop_node", "relation": "classified_as" if has_photo else "unclassified"},
+            {"from": "crop_node", "to": "adv_node", "relation": "recommended_management" if advisory_result.get("source_grounded") else "no_advisory"},
             {"from": "claim_root", "to": "trust_node", "relation": "evaluated_by"}
         ]
 
-        if agri_logistics and "distance_km" in agri_logistics:
+        if agri_logistics and "distance_km" in agri_logistics and agri_logistics.get("distance_km") is not None:
             d_km = agri_logistics.get("distance_km")
             is_aws = agri_logistics.get("aws_credentials_available", False)
             src_lbl = "Amazon Location" if is_aws else "Local Haversine"
@@ -96,12 +103,13 @@ class EvidenceGraphBuilder:
             {
                 "source_type": "FIELD_PHOTOGRAPH",
                 "source_ref": vision_result.get("image_filename"),
-                "extracted_crop": vision_result.get("final_verified_crop"),
-                "confidence": vision_result.get("final_confidence")
+                "extracted_crop": crop_name,
+                "confidence": vision_result.get("final_confidence") if has_photo else 0.0,
+                "status": "VERIFIED_PERCEIVED" if has_photo else "PHOTO_ABSENT"
             }
         ]
 
-        if agri_logistics and "distance_km" in agri_logistics:
+        if agri_logistics and "distance_km" in agri_logistics and agri_logistics.get("distance_km") is not None:
             source_evidence.append({
                 "source_type": "AGRI_LOGISTICS_ROUTING",
                 "source_ref": agri_logistics.get("source"),
@@ -114,7 +122,7 @@ class EvidenceGraphBuilder:
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "title": "VerifiedResultObject",
             "claim_id": claim_id,
-            "survey_number": str(survey_no),
+            "survey_number": str(survey_no) if survey_no else "UNSPECIFIED",
             "village": village,
             "district": parcel_gis.get("district", "Thoothukudi"),
             "extracted_attributes": {
@@ -123,8 +131,8 @@ class EvidenceGraphBuilder:
                 "gis_area_acres": parcel_gis.get("area_acres"),
                 "documented_area_acres": doc_claims.get("claimed_extent_acres"),
                 "extent_difference_pct": registry_check.get("extent_diff_pct"),
-                "predicted_crop": vision_result.get("final_verified_crop"),
-                "growth_stage": vision_result.get("final_verified_stage"),
+                "predicted_crop": crop_name,
+                "growth_stage": crop_stage,
                 "land_classification": doc_claims.get("land_classification") or registry_check.get("land_classification", "Agricultural"),
                 "document_found": doc_found,
                 "document_source": doc_claims.get("document_source")

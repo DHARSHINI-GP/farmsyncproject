@@ -245,11 +245,11 @@ class AIAssistantEngine:
         start_time = time.time()
 
         # Step 1: Detect Survey Number from query or use selected survey
-        survey_match = re.search(r'survey\s*(?:number|no\.?|#)?\s*([0-9]+(?:/[0-9]+[A-Za-z]*)?)', query, re.IGNORECASE)
-        target_survey = survey_no or (survey_match.group(1) if survey_match else "384")
+        detected_survey = self.orchestrator.compiler.extract_survey_number(query)
+        target_survey = survey_no or detected_survey
 
         # Step 2: Execute Orchestrator for Ground Truth Tools
-        effective_query = f"Analyze Survey Number {target_survey} in Keelathattaparai village: {query}"
+        effective_query = f"Analyze Survey Number {target_survey} in Keelathattaparai village: {query}" if target_survey else query
         orch_res = self.orchestrator.execute_request(
             query=effective_query,
             document_path=document_path,

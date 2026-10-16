@@ -130,15 +130,28 @@ class DocumentRegistryEngine:
     def extract_document_claims(
         self, 
         doc_path: Optional[str] = None, 
-        survey_no: str = "384", 
+        survey_no: Optional[str] = None, 
         simulate_mismatch: bool = False
     ) -> Dict[str, Any]:
         """
         Extracts verified claims from a specified land document PDF or auto-resolved document.
         
-        STRICT COMPLIANCE: If the survey number is not found in the PDF, returns found=False.
-        Never fabricates fallback claims.
+        STRICT COMPLIANCE: If the survey number is not found in the PDF or not specified, returns found=False.
+        Never fabricates fallback claims or defaults to Survey 384.
         """
+        if not survey_no:
+            return {
+                "survey_no": None,
+                "document_source": None,
+                "found": False,
+                "extraction_method": "NO_SURVEY_SPECIFIED",
+                "extracted_owner": None,
+                "claimed_extent_acres": None,
+                "land_classification": None,
+                "status": "NO_SURVEY_SPECIFIED",
+                "notice": "No survey number specified for document extraction."
+            }
+
         clean_no = str(survey_no).strip()
         resolved_full_path = None
         rel_doc_name = None

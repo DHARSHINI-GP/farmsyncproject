@@ -108,7 +108,7 @@ class TaskGraph:
     ):
         self.workflow_type = workflow_type
         self.query = query
-        self.target_survey_no = target_survey_no or "384"
+        self.target_survey_no = target_survey_no
         self.explicit_survey_provided = explicit_survey_provided
         self.target_village = target_village
         self.target_document = target_document
@@ -224,17 +224,93 @@ class TaskGraphCompiler:
         {"id": "task_4", "name": "Environmental Compliance Synthesis", "type": "TRUST_SYNTHESIS", "deps": ["task_2", "task_3"], "inputs": ["waterbody_buffer", "transit_route"], "outputs": ["compliance_report"]}
     ]
 
+    @staticmethod
+    def extract_survey_number(query: str) -> Optional[str]:
+        """
+        Extracts survey numbers and subdivision identifiers from diverse cadastral formats:
+        - "Survey Number 384", "Survey No. 384/1A", "Survey #384", "Survey 384"
+        - "S.No. 384/1", "S.No 384", "SNo 384", "S. No. 384", "Sy. No. 384", "Syno 384"
+        - "S.F. No. 384", "SF No. 384", "SFNo 384" (Survey Field Number)
+        - "R.S. No. 384", "RS No. 384" (Re-survey Number)
+        - "Cadastral Parcel 384", "Parcel No. 384", "Parcel 384", "Plot 384"
+        - Subdivisions: 384/1, 384/1A, 384-1B, 176/2, 381/1, etc.
+        """
+        patterns = [
+            # Formats with prefix: Survey, S.No, S.F. No, SF No, Sy. No, RS No, Cadastral Parcel, Parcel, Plot
+            r'(?:(?:survey|re-?survey|cadastral\s*parcel|parcel|plot)\s*(?:number|num|no\.?|#|id)?|s\.?\s*f\.?\s*no\.?|s\.?\s*y\.?\s*no\.?|r\.?\s*s\.?\s*no\.?|s\.?\s*no\.?)\s*[:#-]?\s*([0-9]+(?:[\/\-_][0-9]+[A-Za-z0-9]*)?)',
+            # Suffix formats: e.g. "384 Survey Number" or "384/1 S.No"
+            r'\b([0-9]+(?:[\/\-_][0-9]+[A-Za-z0-9]*)?)\s*(?:survey\s*(?:number|no\.?|#)?|s\.?no\.?)',
+            # Key-value or direct survey assignment
+            r'\bsurvey\s*[:=]\s*([0-9]+(?:[\/\-_][0-9]+[A-Za-z0-9]*)?)'
+        ]
+        for pat in patterns:
+            m = re.search(pat, query, re.IGNORECASE)
+            if m:
+                clean = m.group(1).strip()
+                clean = re.sub(r'[\.,;]$', '', clean)
+                return clean
+        return None
+
+    @staticmethod
+    def extract_village_name(query: str) -> str:
+        """
+        Extracts multi-word village names from natural language queries:
+        - "in Keela Thattaparai village", "for Keelathattaparai village"
+        - "village of Keela Thattaparai", "village: Keelathattaparai"
+        - "village Keelathattaparai"
+        - "Mela Thattaparai village"
+        Defaults to "Keelathattaparai" if no village entity is found.
+        """
+        # Pattern 1: Multi-word name preceding 'village' with preposition (in/at/for/of)
+        m1 = re.search(r'(?:\bin|\bat|\bfor|\bof)\s+([A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)*)\s+village\b', query)
+        if m1:
+            name = m1.group(1).strip()
+            name_clean = re.sub(r'^(the|in|at|of|for)\s+', '', name, flags=re.IGNORECASE).strip()
+            if len(name_clean) > 2 and name_clean.lower() not in ["survey", "parcel", "document", "this", "target"]:
+                return name_clean
+
+        # Pattern 2: Name following 'village of' or 'village:' (Title Cased)
+        m2 = re.search(r'\bvillage\s*(?:of|:)\s+([A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)*)', query)
+        if m2:
+            name = m2.group(1).strip()
+            name_clean = re.sub(r'\s+(?:panchayat|taluk|district|village|,|\.|\bin\b|\bwith\b|\bfor\b|\bidentify\b|\bverify\b|\bcheck\b|\busing\b|\bparcels?\b).*$', '', name, flags=re.IGNORECASE).strip()
+            if len(name_clean) > 2 and name_clean.lower() not in ["survey", "parcel", "document", "this", "target", "the"]:
+                return name_clean
+
+        # Pattern 3: Name directly following 'village <Name>' (Title Cased, e.g. "village Keelathattaparai")
+        m3 = re.search(r'\bvillage\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', query)
+        if m3:
+            name = m3.group(1).strip()
+            stopwords = {"parcels", "boundary", "land", "records", "level", "administration", "officer", "survey"}
+            if len(name) > 2 and name.lower() not in stopwords:
+                return name
+
+        # Pattern 4: Any Title Cased word(s) immediately preceding 'village' (not stopwords)
+        m4 = re.search(r'\b([A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)*)\s+village\b', query)
+        if m4:
+            words = m4.group(1).split()
+            stopwords = {"analyze", "examine", "check", "verify", "inspect", "audit", "find", "identify", "evaluate", "review", "parcel", "the", "this", "target", "using", "supplied"}
+            clean_words = [w for w in words if w.lower() not in stopwords]
+            if clean_words:
+                return " ".join(clean_words)
+
+        # Pattern 5: Explicit 'in <Name> (panchayat|taluk|district)'
+        m5 = re.search(r'\bin\s+([A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)*)\s+(?:panchayat|taluk|district)\b', query)
+        if m5:
+            name = m5.group(1).strip()
+            if len(name) > 2:
+                return name
+
+        return "Keelathattaparai"
+
     def compile(self, query: str) -> TaskGraph:
         """
         Compiles user query into a typed executable TaskGraph DAG.
         Extracts key entities (survey number, village, document name, intent) without fabrication.
         """
-        # Entity extraction via regex patterns
-        survey_match = re.search(r'survey\s*(?:number|no\.?|#)?\s*([0-9]+(?:/[0-9]+[A-Za-z]*)?)', query, re.IGNORECASE)
-        survey_no = survey_match.group(1) if survey_match else None
-
-        village_match = re.search(r'village\s+([A-Za-z]+)', query, re.IGNORECASE)
-        village = village_match.group(1) if village_match else "Keelathattaparai"
+        # Entity extraction via robust regex patterns
+        survey_no = self.extract_survey_number(query)
+        village = self.extract_village_name(query)
 
         # Document filename extraction
         doc_match = re.search(r'([A-Za-z0-9_\-\(\)\s]+\.pdf)', query, re.IGNORECASE)
@@ -274,3 +350,8 @@ class TaskGraphCompiler:
             graph.add_node(node)
 
         return graph
+
+
+# Module-level aliases for direct utility access
+extract_survey_number = TaskGraphCompiler.extract_survey_number
+extract_village_name = TaskGraphCompiler.extract_village_name

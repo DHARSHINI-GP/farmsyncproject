@@ -63,7 +63,7 @@ class FarmSyncOrchestrator:
 
         # Step 1: Compile query into executable TaskGraph DAG
         task_graph: TaskGraph = self.compiler.compile(query)
-        target_survey = survey_no or (task_graph.target_survey_no if task_graph.explicit_survey_provided else (survey_no or "384"))
+        target_survey = survey_no or task_graph.target_survey_no
         village = task_graph.target_village or "Keelathattaparai"
         target_doc = document_path or task_graph.target_document
 
@@ -254,7 +254,7 @@ class FarmSyncOrchestrator:
         elif stype == "GEOSPATIAL_GIS":
             target_survey = context["survey_no"]
             doc_claims = context["doc_claims"] or {}
-            parcel_gis = self.spatial.get_parcel(target_survey)
+            parcel_gis = self.spatial.get_parcel(target_survey) if target_survey else None
             context["parcel_gis"] = parcel_gis
 
             if parcel_gis:
@@ -283,8 +283,8 @@ class FarmSyncOrchestrator:
                 context["agri_logistics"] = agri_logistics
             else:
                 spatial_constraints = {
-                    "survey_no": target_survey,
-                    "error": f"Survey number {target_survey} not found in cadastral GeoJSON",
+                    "survey_no": target_survey or "UNSPECIFIED",
+                    "error": f"Survey number '{target_survey}' not found in cadastral geospatial layer",
                     "spatial_engine": "GeoPandas_Shapely_UTM44N",
                     "cadastral_containment_valid": False,
                     "geometry_valid": False,
@@ -292,14 +292,24 @@ class FarmSyncOrchestrator:
                     "waterbody_buffer_conflict": False,
                     "waterbody_buffer_50m_compliant": False,
                     "road_accessible": False,
-                    "deterministic_spatial_verified": False
+                    "deterministic_spatial_verified": False,
+                    "status": "PARCEL_NOT_FOUND_IN_CADASTRAL"
                 }
                 extent_check = {
-                    "survey_no": target_survey,
+                    "survey_no": target_survey or "UNSPECIFIED",
                     "claimed_acres": doc_claims.get("claimed_extent_acres"),
                     "gis_acres": None,
+                    "difference_acres": 0.0,
+                    "discrepancy_percentage": 100.0,
                     "discrepancy_exceeded": True,
                     "verification_status": "CADASTRAL_PARCEL_NOT_FOUND"
+                }
+                context["agri_logistics"] = {
+                    "survey_no": target_survey or "UNSPECIFIED",
+                    "status": "NO_PARCEL_COORDINATES",
+                    "error": f"Survey '{target_survey}' not found in cadastral map",
+                    "aws_credentials_available": False,
+                    "distance_km": None
                 }
 
             context["spatial_constraints"] = spatial_constraints
@@ -310,7 +320,7 @@ class FarmSyncOrchestrator:
 
         elif stype == "VISION_STUDENT":
             target_survey = context["survey_no"]
-            img_record = self.vision.get_image_for_survey(target_survey)
+            img_record = self.vision.get_image_for_survey(target_survey) if target_survey else None
             context["img_record"] = img_record
             img_path = img_record["filepath"] if img_record else None
 
@@ -337,7 +347,7 @@ class FarmSyncOrchestrator:
             img_record = context.get("img_record")
             img_path = img_record["filepath"] if img_record else None
 
-            if "Teacher" in selected_route:
+            if "Teacher" in selected_route and img_path:
                 if not vision_result.get("escalated_to_teacher"):
                     vision_result = self.vision.predict_crop(
                         img_path,
@@ -346,15 +356,21 @@ class FarmSyncOrchestrator:
                     )
                     context["vision_result"] = vision_result
                 escalation_decision = "ESCALATED_TO_TEACHER"
+            elif not vision_result.get("has_image"):
+                escalation_decision = "PHOTO_ABSENT_CANNOT_ESCALATE"
             else:
                 escalation_decision = "CONFIDENT_STUDENT_ACCEPTED"
 
             if context.get("simulate_unsupported_crop"):
                 context["final_crop"] = "Unclassified Alien Weed / Out-of-Distribution Flora"
                 context["final_stage"] = "unclassified"
+            elif not vision_result.get("has_image"):
+                # Strictly refuse to fabricate crop perception when no field photograph exists
+                context["final_crop"] = None
+                context["final_stage"] = None
             else:
-                context["final_crop"] = vision_result.get("final_verified_crop", "Coconut")
-                context["final_stage"] = vision_result.get("final_verified_stage", "full_growth")
+                context["final_crop"] = vision_result.get("final_verified_crop")
+                context["final_stage"] = vision_result.get("final_verified_stage")
 
             return {
                 "escalation_decision": escalation_decision,
@@ -363,10 +379,30 @@ class FarmSyncOrchestrator:
             }
 
         elif stype == "RAG_KNOWLEDGE":
-            final_crop = context.get("final_crop") or "Coconut"
-            final_stage = context.get("final_stage") or "full_growth"
+            final_crop = context.get("final_crop")
+            final_stage = context.get("final_stage")
 
-            advisory_result = self.knowledge.get_advisory(final_crop, final_stage)
+            if not final_crop:
+                # No verified field crop perception available for this survey
+                target_survey_label = context.get("survey_no") or "Unspecified"
+                advisory_result = {
+                    "crop": None,
+                    "growth_stage": None,
+                    "found": False,
+                    "source_grounded": False,
+                    "verdict": "NO_VERIFIED_CROP_NO_ADVISORY",
+                    "advisory_title": f"No Agronomy Advisory Available for Survey {target_survey_label}",
+                    "fertilizer_schedule": None,
+                    "water_management": None,
+                    "pest_management": None,
+                    "citation_source": None,
+                    "retrieval_method": "FAISS_Vector_Search",
+                    "similarity_score": 0.0,
+                    "notice": f"Survey {target_survey_label} has no verified field crop on record. System strictly refuses to generate ungrounded fertilizer advisory."
+                }
+            else:
+                advisory_result = self.knowledge.get_advisory(final_crop, final_stage or "full_growth")
+
             context["advisory_result"] = advisory_result
             return {
                 "crop_advised": final_crop,
@@ -386,32 +422,32 @@ class FarmSyncOrchestrator:
             has_land_doc = bool(doc_claims.get("found", False))
             has_reg = bool(reg_check.get("registry_found", False))
             has_parcel = (parcel_gis is not None)
-            has_photo = (img_record is not None)
+            has_photo = bool(vision_result.get("has_image", False))
 
             doc_reg_match = bool(reg_check.get("owner_match", False) and has_land_doc)
             spatial_match = (extent_check.get("verification_status") == "MATCH")
 
             candidate_payload = {
-                "survey_number": context["survey_no"],
+                "survey_number": str(context["survey_no"]) if context["survey_no"] else "UNSPECIFIED",
                 "village": context["village"],
                 "extracted_attributes": {
                     "registered_owner": reg_check.get("official_owner") or doc_claims.get("extracted_owner"),
                     "gis_area_acres": parcel_gis.get("area_acres") if parcel_gis else None,
-                    "predicted_crop": context.get("final_crop") or vision_result.get("final_verified_crop"),
-                    "growth_stage": context.get("final_stage") or vision_result.get("final_verified_stage")
+                    "predicted_crop": context.get("final_crop"),
+                    "growth_stage": context.get("final_stage")
                 },
                 "deterministic_spatial_checks": {
                     "spatial_extent_verified": spatial_match,
-                    "waterbody_buffer_compliant": not spatial_constraints.get("waterbody_buffer_conflict", False)
+                    "waterbody_buffer_compliant": not spatial_constraints.get("waterbody_buffer_conflict", False) if parcel_gis else False
                 }
             }
 
             trust_result = self.trust_engine.evaluate_trust(
-                vision_confidence=vision_result.get("confidence", 0.0),
-                is_supported_crop=not context["simulate_unsupported_crop"],
+                vision_confidence=vision_result.get("confidence", 0.0) if has_photo else 0.0,
+                is_supported_crop=bool(context.get("final_crop") and not context["simulate_unsupported_crop"]),
                 doc_registry_match=doc_reg_match,
                 spatial_extent_match=spatial_match,
-                waterbody_conflict=spatial_constraints.get("waterbody_buffer_conflict", False),
+                waterbody_conflict=spatial_constraints.get("waterbody_buffer_conflict", False) if parcel_gis else False,
                 has_field_photo=has_photo,
                 has_land_doc=has_land_doc,
                 has_registry=has_reg and has_parcel,

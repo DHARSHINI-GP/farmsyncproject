@@ -53,6 +53,13 @@ class SpatialEngine:
         matches_utm = self.gdf_parcels_utm[self.gdf_parcels_utm["survey_no_clean"] == clean_no]
         matches_wgs = self.gdf_parcels_wgs84[self.gdf_parcels_wgs84["survey_no_clean"] == clean_no]
         
+        # If subdivision specified (e.g., 384/1 or 384-1), check parent survey number
+        if matches_utm.empty and any(sep in clean_no for sep in ["/", "-", "_"]):
+            import re
+            base_no = re.split(r'[/_\-]', clean_no)[0].strip()
+            matches_utm = self.gdf_parcels_utm[self.gdf_parcels_utm["survey_no_clean"] == base_no]
+            matches_wgs = self.gdf_parcels_wgs84[self.gdf_parcels_wgs84["survey_no_clean"] == base_no]
+
         if matches_utm.empty:
             return None
         
