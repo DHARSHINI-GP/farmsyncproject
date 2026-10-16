@@ -1,5 +1,11 @@
 from typing import Dict, Any, List, Optional
-import jsonschema
+
+try:
+    import jsonschema
+    JSONSCHEMA_AVAILABLE = True
+except ImportError:
+    jsonschema = None
+    JSONSCHEMA_AVAILABLE = False
 
 
 class TrustEngine:
@@ -73,6 +79,22 @@ class TrustEngine:
         """
         if payload is None:
             return 1.00
+
+        if not JSONSCHEMA_AVAILABLE or jsonschema is None:
+            # Deterministic structural check without jsonschema library
+            try:
+                for k in ["survey_number", "village", "extracted_attributes", "deterministic_spatial_checks"]:
+                    if k not in payload:
+                        return 0.00
+                ext = payload.get("extracted_attributes")
+                if not isinstance(ext, dict):
+                    return 0.00
+                for a in ["registered_owner", "gis_area_acres", "predicted_crop", "growth_stage"]:
+                    if a not in ext:
+                        return 0.00
+                return 1.00
+            except Exception:
+                return 0.00
 
         try:
             jsonschema.validate(instance=payload, schema=self.OUTPUT_SCHEMA)

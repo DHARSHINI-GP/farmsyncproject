@@ -2,7 +2,13 @@ import os
 import re
 import json
 from typing import Dict, Any, Optional, List
-import pdfplumber
+
+try:
+    import pdfplumber
+    PDFPLUMBER_AVAILABLE = True
+except ImportError:
+    pdfplumber = None
+    PDFPLUMBER_AVAILABLE = False
 
 class DocumentRegistryEngine:
     """

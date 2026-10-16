@@ -6,10 +6,18 @@ import base64
 from typing import Dict, Any, Optional, List, Tuple
 from PIL import Image
 
-import torch
-import torch.nn as nn
-import torchvision.models as models
-import torchvision.transforms as transforms
+try:
+    import torch
+    import torch.nn as nn
+    import torchvision.models as models
+    import torchvision.transforms as transforms
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    nn = None
+    models = None
+    transforms = None
+    TORCH_AVAILABLE = False
 
 from farmsync.vision.train_crop_model import MultiTaskCropNet, CROP_CLASSES, STAGE_CLASSES
 
@@ -45,27 +53,35 @@ class CropVisionPipeline:
         self.stage_classes = STAGE_CLASSES
 
         # 1. Initialize PyTorch Vision Backbone & MultiTask Head
-        print("Initializing PyTorch MobileNetV3-CropNet Vision Model...")
-        self.mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-        self.mobilenet.eval()
-        self.backbone = self.mobilenet.features
-        self.pool = self.mobilenet.avgpool
+        if TORCH_AVAILABLE and models is not None and transforms is not None:
+            print("Initializing PyTorch MobileNetV3-CropNet Vision Model...")
+            self.mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+            self.mobilenet.eval()
+            self.backbone = self.mobilenet.features
+            self.pool = self.mobilenet.avgpool
 
-        self.model = MultiTaskCropNet(len(self.crop_classes), len(self.stage_classes))
-        if os.path.exists(self.weights_path):
-            state = torch.load(self.weights_path, map_location=torch.device("cpu"))
-            self.model.load_state_dict(state)
-            print(f"Loaded trained CropNet weights from {self.weights_path}")
+            self.model = MultiTaskCropNet(len(self.crop_classes), len(self.stage_classes))
+            if os.path.exists(self.weights_path):
+                state = torch.load(self.weights_path, map_location=torch.device("cpu"))
+                self.model.load_state_dict(state)
+                print(f"Loaded trained CropNet weights from {self.weights_path}")
+            else:
+                print("Warning: crop_model.pth not found, using initialized weights.")
+            self.model.eval()
+
+            # ImageNet Standard Preprocessing Transform
+            self.transform = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
         else:
-            print("Warning: crop_model.pth not found, using initialized weights.")
-        self.model.eval()
-
-        # ImageNet Standard Preprocessing Transform
-        self.transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
+            self.mobilenet = None
+            self.backbone = None
+            self.pool = None
+            self.model = None
+            self.transform = None
+            print("Notice: PyTorch / torchvision not available. Neural vision inference operating in graceful stub mode.")
 
         # Teacher Multimodal VLM Client (AWS Bedrock)
         self.bedrock_client = None
@@ -201,6 +217,29 @@ class CropVisionPipeline:
             }
 
         filename = os.path.basename(image_path)
+
+        # Check if PyTorch model is initialized
+        if not TORCH_AVAILABLE or self.model is None or self.transform is None:
+            if force_escalate and self.bedrock_client:
+                print("PyTorch unavailable; escalating to Bedrock Teacher model directly...")
+                return self._predict_with_teacher(image_path, start_time)
+            return {
+                "has_image": True,
+                "image_filename": filename,
+                "student_model": "PyTorch Unavailable (Clean Environment)",
+                "predicted_crop": None,
+                "predicted_stage": None,
+                "confidence": 0.0,
+                "is_out_of_distribution": False,
+                "escalated_to_teacher": False,
+                "teacher_model": None,
+                "final_verified_crop": None,
+                "final_verified_stage": None,
+                "final_confidence": 0.0,
+                "status": "PYTORCH_NOT_INSTALLED",
+                "message": "PyTorch/torchvision is not installed in this environment. Visual perception safely abstained.",
+                "inference_latency_ms": int((time.time() - start_time) * 1000)
+            }
 
         # ── Step 1: Real PyTorch Tensor Inference ──────────────────────────────
         try:

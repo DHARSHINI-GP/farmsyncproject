@@ -5,13 +5,23 @@ import json
 import time
 from collections import Counter
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import TensorDataset, DataLoader
-from PIL import Image
-import torchvision.models as models
-import torchvision.transforms as transforms
+try:
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from torch.utils.data import TensorDataset, DataLoader
+    import torchvision.models as models
+    import torchvision.transforms as transforms
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    nn = None
+    optim = None
+    TensorDataset = None
+    DataLoader = None
+    models = None
+    transforms = None
+    TORCH_AVAILABLE = False
 
 # Base paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -65,29 +75,35 @@ def normalize_stage_name(raw_stage: str) -> str:
             return s
     return "vegetation"
 
-class MultiTaskCropNet(nn.Module):
-    """Production Multi-Task Crop and Stage Perception Network."""
-    def __init__(self, num_crops=len(CROP_CLASSES), num_stages=len(STAGE_CLASSES)):
-        super().__init__()
-        self.crop_head = nn.Sequential(
-            nn.Linear(576, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, num_crops)
-        )
-        self.stage_head = nn.Sequential(
-            nn.Linear(576, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(64, num_stages)
-        )
+if TORCH_AVAILABLE and nn is not None:
+    class MultiTaskCropNet(nn.Module):
+        """Production Multi-Task Crop and Stage Perception Network."""
+        def __init__(self, num_crops=len(CROP_CLASSES), num_stages=len(STAGE_CLASSES)):
+            super().__init__()
+            self.crop_head = nn.Sequential(
+                nn.Linear(576, 128),
+                nn.BatchNorm1d(128),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(128, num_crops)
+            )
+            self.stage_head = nn.Sequential(
+                nn.Linear(576, 64),
+                nn.BatchNorm1d(64),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(64, num_stages)
+            )
 
-    def forward(self, feat):
-        crop_logits = self.crop_head(feat)
-        stage_logits = self.stage_head(feat)
-        return crop_logits, stage_logits
+        def forward(self, feat):
+            crop_logits = self.crop_head(feat)
+            stage_logits = self.stage_head(feat)
+            return crop_logits, stage_logits
+else:
+    class MultiTaskCropNet:
+        """Stub class for environments without PyTorch installed."""
+        def __init__(self, *args, **kwargs):
+            pass
 
 def train():
     print("=" * 60)
