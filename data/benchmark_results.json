@@ -1,11 +1,11 @@
 {
-  "benchmark_suite": "FARMSYNC 50-Query Head-to-Head Multimodal Cadastral Benchmark",
+  "benchmark_suite": "FARMSYNC 50-Query Multimodal Cadastral Benchmark (Measured vs Simulated)",
   "evaluation_timestamp": "2026-10-17 00:34:05",
   "total_queries": 50,
-  "methodology": "Measured head-to-head empirical evaluation across 50 diverse queries with ground-truth verification",
+  "methodology": "Hybrid evaluation: FARMSYNC measured live query-by-query on actual local models and GIS tools; competitor baselines (Premium-Only and Static Pipeline) are simulated architectural models based on token cost assumptions, synthetic latency offsets, and prompt-only spatial estimation without external API calls.",
   "summary": {
     "FARMSYNC": {
-      "name": "FARMSYNC (Adaptive Orchestration)",
+      "name": "FARMSYNC (Adaptive Orchestration - Measured Live)",
       "architecture": "Verified-Utility Router + Deterministic GeoPandas/Shapely GIS + FTS Trust Engine",
       "total_queries_evaluated": 50,
       "verified_accuracy_pct": 100.0,
@@ -15,8 +15,8 @@
       "cost_savings_vs_premium_pct": 90.4
     },
     "Premium_Only": {
-      "name": "Premium-Only (Pure Frontier VLM)",
-      "architecture": "Pure commercial VLM called for every subtask without deterministic GIS",
+      "name": "Simulated Premium-Only (Frontier VLM Baseline)",
+      "architecture": "Simulated prompt-only commercial VLM without deterministic GIS (token cost model $0.0125, synthetic latency profile)",
       "total_queries_evaluated": 50,
       "verified_accuracy_pct": 46.0,
       "average_cost_usd": 0.0125,
@@ -25,8 +25,8 @@
       "cost_savings_vs_premium_pct": 0.0
     },
     "Static_Routing": {
-      "name": "Static Pipeline (Fixed Routing)",
-      "architecture": "Fixed model assignment without escalation, GIS tools, or FTS trust gating",
+      "name": "Simulated Static Pipeline (Fixed Routing Baseline)",
+      "architecture": "Simulated fixed model assignment without escalation, GIS tools, or FTS trust gating",
       "total_queries_evaluated": 50,
       "verified_accuracy_pct": 44.0,
       "average_cost_usd": 0.00085,

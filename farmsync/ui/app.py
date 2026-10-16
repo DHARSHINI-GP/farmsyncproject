@@ -372,28 +372,28 @@ with tab_telemetry:
 
 # Tab 5: Baseline Comparison
 with tab_baselines:
-    st.subheader("Head-to-Head Baseline Benchmarking")
-    st.markdown("To demonstrate that adaptive orchestration adds value, FARMSYNC benchmarks directly against two baselines:")
+    st.subheader("Comparative Benchmarking: Live System vs Simulated Baselines")
+    st.info("ℹ️ **Notice on Baseline Simulation**: FARMSYNC execution is measured live query-by-query on actual local models and GIS tools. Competitor baselines (Premium-Only and Static Pipeline) are simulated architectural models based on token cost assumptions ($0.0125/query), synthetic latency offsets, and prompt-only spatial estimation without external API calls.")
     
     # 1. Live Query Comparison
     st.markdown("#### Live Query Execution Telemetry")
     b_data = [
         {
-            "Architecture": "FARMSYNC (Adaptive Orchestration)",
+            "Architecture": "FARMSYNC (Adaptive Orchestration - Measured Live)",
             "Cost ($)": f"${baselines['FARMSYNC']['cost_usd']:.5f}",
             "Latency (ms)": f"{baselines['FARMSYNC']['latency_ms']} ms",
             "Spatial Hallucinations": f"{baselines['FARMSYNC']['hallucination_rate_pct']}%",
             "Cost Savings vs Premium": f"{baselines['FARMSYNC']['cost_savings_vs_premium_pct']}%"
         },
         {
-            "Architecture": "Premium-Only (Pure GPT-4o)",
+            "Architecture": "Simulated Premium-Only (Prompt-Only VLM)",
             "Cost ($)": f"${baselines['Premium_Only']['cost_usd']:.5f}",
             "Latency (ms)": f"{baselines['Premium_Only']['latency_ms']} ms",
             "Spatial Hallucinations": f"{baselines['Premium_Only']['hallucination_rate_pct']}%",
             "Cost Savings vs Premium": "0.0%"
         },
         {
-            "Architecture": "Static Routing (No Verifier)",
+            "Architecture": "Simulated Static Routing (No Verifier)",
             "Cost ($)": f"${baselines['Static_Routing']['cost_usd']:.5f}",
             "Latency (ms)": f"{baselines['Static_Routing']['latency_ms']} ms",
             "Spatial Hallucinations": f"{baselines['Static_Routing']['hallucination_rate_pct']}%",
@@ -402,10 +402,10 @@ with tab_baselines:
     ]
     st.table(pd.DataFrame(b_data))
 
-    # 2. Authentic 50-Query Head-to-Head Empirical Benchmark
+    # 2. 50-Query Benchmark Results (Measured vs Simulated)
     st.markdown("---")
-    st.markdown("#### Authentic 50-Query Empirical Benchmark Results")
-    st.caption("Empirical measurements across 50 diverse queries spanning Confident Grounded, Perception Escalation, Buffer & Access, Document Extent Discrepancies, and Unsupported/Abstain categories:")
+    st.markdown("#### 50-Query Benchmark Results (Measured FARMSYNC vs Simulated Baselines)")
+    st.caption("Measurements across 50 diverse queries spanning Confident Grounded, Perception Escalation, Buffer & Access, Document Extent Discrepancies, and Unsupported/Abstain categories:")
 
     bench_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "benchmark_results.json")
     if os.path.exists(bench_path):
@@ -416,7 +416,7 @@ with tab_baselines:
             b_summary = bench_data.get("summary", {})
             bench_table = [
                 {
-                    "Architecture": "FARMSYNC (Adaptive Orchestration)",
+                    "Architecture": "FARMSYNC (Measured Live Run)",
                     "Measured Accuracy": f"{b_summary.get('FARMSYNC', {}).get('verified_accuracy_pct', 100.0)}%",
                     "Avg Cost ($)": f"${b_summary.get('FARMSYNC', {}).get('average_cost_usd', 0.0012):.5f}",
                     "Avg Latency (ms)": f"{b_summary.get('FARMSYNC', {}).get('average_latency_ms', 311)} ms",
@@ -424,7 +424,7 @@ with tab_baselines:
                     "Cost Savings": f"{b_summary.get('FARMSYNC', {}).get('cost_savings_vs_premium_pct', 90.4)}%"
                 },
                 {
-                    "Architecture": "Premium-Only (Pure Frontier VLM)",
+                    "Architecture": "Simulated Premium-Only (Frontier VLM Baseline)",
                     "Measured Accuracy": f"{b_summary.get('Premium_Only', {}).get('verified_accuracy_pct', 46.0)}%",
                     "Avg Cost ($)": f"${b_summary.get('Premium_Only', {}).get('average_cost_usd', 0.0125):.5f}",
                     "Avg Latency (ms)": f"{b_summary.get('Premium_Only', {}).get('average_latency_ms', 1632)} ms",
@@ -432,7 +432,7 @@ with tab_baselines:
                     "Cost Savings": "0.0%"
                 },
                 {
-                    "Architecture": "Static Routing (No Verifier)",
+                    "Architecture": "Simulated Static Routing (Fixed Routing Baseline)",
                     "Measured Accuracy": f"{b_summary.get('Static_Routing', {}).get('verified_accuracy_pct', 44.0)}%",
                     "Avg Cost ($)": f"${b_summary.get('Static_Routing', {}).get('average_cost_usd', 0.00085):.5f}",
                     "Avg Latency (ms)": f"{b_summary.get('Static_Routing', {}).get('average_latency_ms', 176)} ms",

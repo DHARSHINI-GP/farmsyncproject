@@ -509,26 +509,29 @@ story.extend(Code(
 ))
 
 # ════════════════════════════════════════════════════════
-# SECTION 6: EMPIRICAL BENCHMARK EVALUATION
+# SECTION 6: COMPARATIVE BENCHMARK & SIMULATED EVALUATION
 # ════════════════════════════════════════════════════════
-story.extend(H1("6. Comparative Benchmark & Evaluation Results"))
+story.extend(H1("6. Comparative Benchmark & Simulated Evaluation Results"))
 story.extend(P(
     "To demonstrate that FARMSYNC's adaptive orchestration delivers tangible advantages, the platform was "
-    "benchmarked across 50 multimodal geospatial queries against two standard baselines:"
+    "benchmarked across 50 multimodal geospatial queries against two architectural baselines (FARMSYNC measured live; "
+    "competitor baselines simulated via token cost and latency models):"
 ))
 
 bench_rows = [
     ["Verification Accuracy", "46.0% (fails buffer & sycophancy)", "44.0% (fails perception & abstain)", "100.0% (deterministic grounding)", "+54.0%"],
-    ["Avg Cost per Query", "$0.01250", "$0.00085", "$0.00120", "-90.4% vs Pure Premium"],
-    ["Avg Response Latency", "1,632 ms", "176 ms", "236 ms (Local) / 311 ms", "-85.5% Latency"],
+    ["Avg Cost per Query", "$0.01250 (assumed)", "$0.00085 (assumed)", "$0.00120 (measured)", "-90.4% vs Pure Premium"],
+    ["Avg Response Latency", "1,632 ms (synthetic)", "176 ms (measured)", "236 ms (Local) / 311 ms", "-85.5% Latency"],
     ["Geometric Hallucinations", "44.0%", "32.0%", "0.0% (GeoPandas + Shapely)", "Zero Hallucination"],
     ["Bounded Recovery Guarantee", "No (prone to looping)", "No (static fails)", "Yes (1-hop recovery / abstain)", "Guaranteed Safe"],
 ]
 story.append(make_table(
-    ["Evaluation Metric", "Pure GPT-4o Baseline", "Static Pipeline", "FARMSYNC (Implemented)", "Advantage"],
+    ["Evaluation Metric", "Simulated GPT-4o Baseline", "Simulated Static Pipeline", "FARMSYNC (Measured Live)", "Advantage"],
     bench_rows,
     col_widths=[3.5*cm, 3.8*cm, 3.6*cm, 4.0*cm, avail_w - 14.9*cm]
 ))
+story.append(Spacer(1, 0.15*cm))
+story.append(Paragraph("<b>Notice on Baseline Simulation:</b> Competitor baselines represent simulated architectural models with token cost and latency assumptions, not live external API calls.", style_bullet))
 story.append(Spacer(1, 0.2*cm))
 
 # ════════════════════════════════════════════════════════

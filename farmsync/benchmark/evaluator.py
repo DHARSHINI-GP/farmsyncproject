@@ -1,12 +1,11 @@
 """
-FARMSYNC Head-to-Head Benchmark Evaluator.
-Executes the authentic 50-query benchmark dataset across three architectures:
-1. FARMSYNC (Adaptive Orchestration + Deterministic GIS + FTS Trust Verification)
-2. Premium-Only (Pure Commercial VLM Baseline without Deterministic Tooling)
-3. Static Pipeline (Fixed Routing without Escalation or Trust Scoring)
+FARMSYNC Benchmark Evaluator.
+Executes the 50-query cadastral benchmark dataset across three architectures:
+1. FARMSYNC (Adaptive Orchestration + Deterministic GIS + FTS Trust Verification - Measured Live)
+2. Simulated Premium-Only (Frontier VLM Baseline without Deterministic Tooling - Simulated Architecture)
+3. Simulated Static Pipeline (Fixed Routing without Escalation or Trust Scoring - Simulated Architecture)
 
-Produces verified, empirical accuracy, cost, latency, and hallucination metrics
-evaluated query-by-query against the exact same ground-truth criteria.
+FARMSYNC is evaluated live on actual models; competitor baselines are simulated architectural models.
 """
 
 import os
@@ -177,23 +176,23 @@ class BenchmarkEvaluator:
                 "average_cost_usd": round(avg_cost, 5),
                 "average_latency_ms": int(avg_latency),
                 "spatial_hallucination_rate_pct": round(hallucination_pct, 1),
-                "cost_savings_vs_premium_pct": round((1.0 - (avg_cost / 0.01250)) * 100.0, 1) if name != "Premium-Only (Pure Frontier VLM)" else 0.0
+                "cost_savings_vs_premium_pct": round((1.0 - (avg_cost / 0.01250)) * 100.0, 1) if "Premium" not in name else 0.0
             }
 
         farmsync_summary = compute_summary(
             farmsync_results,
-            "FARMSYNC (Adaptive Orchestration)",
+            "FARMSYNC (Adaptive Orchestration - Measured Live)",
             "Verified-Utility Router + Deterministic GeoPandas/Shapely GIS + FTS Trust Engine"
         )
         premium_summary = compute_summary(
             premium_results,
-            "Premium-Only (Pure Frontier VLM)",
-            "Pure commercial VLM called for every subtask without deterministic GIS"
+            "Simulated Premium-Only (Frontier VLM Baseline)",
+            "Simulated prompt-only commercial VLM without deterministic GIS (token cost model $0.0125, synthetic latency profile)"
         )
         static_summary = compute_summary(
             static_results,
-            "Static Pipeline (Fixed Routing)",
-            "Fixed model assignment without escalation, GIS tools, or FTS trust gating"
+            "Simulated Static Pipeline (Fixed Routing Baseline)",
+            "Simulated fixed model assignment without escalation, GIS tools, or FTS trust gating"
         )
 
         # Category-level breakdown for FARMSYNC
@@ -214,10 +213,10 @@ class BenchmarkEvaluator:
                 }
 
         benchmark_data = {
-            "benchmark_suite": "FARMSYNC 50-Query Head-to-Head Multimodal Cadastral Benchmark",
+            "benchmark_suite": "FARMSYNC 50-Query Multimodal Cadastral Benchmark (Measured vs Simulated)",
             "evaluation_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "total_queries": total_q,
-            "methodology": "Measured head-to-head empirical evaluation across 50 diverse queries with ground-truth verification",
+            "methodology": "Hybrid evaluation: FARMSYNC measured live query-by-query on actual local models and GIS tools; competitor baselines (Premium-Only and Static Pipeline) are simulated architectural models based on token cost assumptions, synthetic latency offsets, and prompt-only spatial estimation without external API calls.",
             "summary": {
                 "FARMSYNC": farmsync_summary,
                 "Premium_Only": premium_summary,

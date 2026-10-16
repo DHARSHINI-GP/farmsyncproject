@@ -53,7 +53,7 @@ class FarmSyncOrchestrator:
         )
 
     def _load_benchmark_summary(self) -> Dict[str, Any]:
-        """Loads empirical results from the authentic 50-query head-to-head benchmark evaluation."""
+        """Loads benchmark results from data/benchmark_results.json (FARMSYNC measured live, competitor baselines simulated)."""
         if os.path.exists(self.benchmark_results_path):
             try:
                 import json
@@ -65,6 +65,7 @@ class FarmSyncOrchestrator:
                 pass
         return {
             "FARMSYNC": {
+                "name": "FARMSYNC (Adaptive Orchestration - Measured Live)",
                 "verified_accuracy_pct": 100.0,
                 "average_cost_usd": 0.00120,
                 "average_latency_ms": 311,
@@ -72,6 +73,7 @@ class FarmSyncOrchestrator:
                 "cost_savings_vs_premium_pct": 90.4
             },
             "Premium_Only": {
+                "name": "Simulated Premium-Only (Frontier VLM Baseline)",
                 "verified_accuracy_pct": 46.0,
                 "average_cost_usd": 0.01250,
                 "average_latency_ms": 1632,
@@ -79,6 +81,7 @@ class FarmSyncOrchestrator:
                 "cost_savings_vs_premium_pct": 0.0
             },
             "Static_Routing": {
+                "name": "Simulated Static Pipeline (Fixed Routing Baseline)",
                 "verified_accuracy_pct": 44.0,
                 "average_cost_usd": 0.00085,
                 "average_latency_ms": 176,
@@ -237,9 +240,11 @@ class FarmSyncOrchestrator:
         stat_bench = bench_summary.get("Static_Routing", {})
 
         baseline_comparison = {
-            "benchmark_suite": "FARMSYNC 50-Query Head-to-Head Multimodal Cadastral Benchmark",
+            "benchmark_suite": "FARMSYNC 50-Query Multimodal Cadastral Benchmark (Measured vs Simulated)",
             "total_benchmark_queries": 50,
+            "methodology_note": "FARMSYNC is measured live query-by-query; competitor baselines are simulated architectural models based on token cost assumptions and prompt-only spatial estimation without external API calls.",
             "FARMSYNC": {
+                "evaluation_type": "measured_live_execution",
                 "architecture": "Verified-Utility Router + Deterministic GeoPandas/Shapely GIS + FTS Trust Engine",
                 "cost_usd": round(total_cost, 5),
                 "latency_ms": total_latency_ms,
@@ -251,7 +256,8 @@ class FarmSyncOrchestrator:
                 "benchmark_avg_latency_ms": fs_bench.get("average_latency_ms", 311)
             },
             "Premium_Only": {
-                "architecture": "Pure Commercial GPT-4o for every subtask",
+                "evaluation_type": "simulated_architectural_baseline",
+                "architecture": "Simulated Commercial Frontier VLM (Prompt-Only Architecture Baseline)",
                 "cost_usd": 0.01250,
                 "latency_ms": 1850,
                 "verified_accuracy_pct": prem_bench.get("verified_accuracy_pct", 46.0),
@@ -262,7 +268,8 @@ class FarmSyncOrchestrator:
                 "benchmark_avg_latency_ms": prem_bench.get("average_latency_ms", 1632)
             },
             "Static_Routing": {
-                "architecture": "Fixed model assignment without trust scoring or escalation",
+                "evaluation_type": "simulated_architectural_baseline",
+                "architecture": "Simulated Static Pipeline (Fixed Routing Architecture Baseline)",
                 "cost_usd": 0.00085,
                 "latency_ms": 176,
                 "verified_accuracy_pct": stat_bench.get("verified_accuracy_pct", 44.0),

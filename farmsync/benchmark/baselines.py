@@ -1,10 +1,15 @@
 """
-FARMSYNC Benchmark Baselines: Executable Competitor Baseline Runners.
+FARMSYNC Benchmark Baselines: Simulated Competitor Baseline Runners.
 
-Provides real, executable runners evaluated query-by-query against the exact same
-50 ground-truth queries without static or hardcoded accuracy/latency numbers:
+Provides executable architectural models of competing un-orchestrated paradigms
+for comparative analysis against FARMSYNC across the 50 ground-truth queries.
 
-1. StaticPipelineRunner:
+NOTICE ON COMPETITOR BASELINE SIMULATION:
+These baselines model the architectural behavior, error modes, token cost pricing,
+and latency profiles of un-orchestrated systems through simulation, rather than via
+direct calls to external third-party commercial APIs (e.g. OpenAI GPT-4o or Anthropic Claude).
+
+1. StaticPipelineRunner (Simulated Fixed-Routing Baseline):
    - Fixed model assignment: executes lightweight student vision model (MobileNetV3) directly
      without dynamic escalation routing to a teacher model.
    - Naive document claim extraction: parses document if present, but has no FTS Trust Engine
@@ -13,21 +18,21 @@ Provides real, executable runners evaluated query-by-query against the exact sam
      or compliance flags.
    - Naive decision policy: unconditionally returns ACCEPT on all queries (cannot cleanly abstain
      on OOD/unsupported parcels or discrepancies).
-   - Real execution latency and genuine student inference cost ($0.00085/query).
+   - Fixed student inference cost assumption ($0.00085/query).
 
-2. PremiumVLMRunner:
-   - Commercial frontier VLM baseline (representing pure GPT-4o / Claude-3.5-Sonnet directly prompted
+2. PremiumVLMRunner (Simulated Commercial Frontier VLM Baseline):
+   - Models pure commercial VLM behavior (e.g. GPT-4o / Claude-3.5-Sonnet directly prompted
      for every subtask without deterministic GIS tools or FTS Trust Verification).
-   - Real execution: executes multimodal perception via AWS Bedrock if available or high-capacity teacher
-     vision model, measuring genuine execution time and computing token costs ($0.01250/query).
-   - Spatial Hallucinations: Because pure VLMs lack GeoPandas/Shapely UTM 44N metric polygon math, on buffer
-     and spatial extent queries, prompt-based distance estimations deviate significantly from true cadastral
-     metric distances and fail deterministic spatial verification.
-   - Sycophancy on Discrepancies: Agrees with legal document text in prompt without cross-checking a cadastral layer.
+   - Perception: Executes FarmSync's internal teacher vision model with forced escalation.
+   - Spatial Hallucination Simulation: Because pure VLMs lack GeoPandas/Shapely UTM 44N metric polygon math,
+     prompt-based distance estimations are simulated with category-based deviations (such as an arbitrary
+     unverified 15m waterbody buffer distance) that fail deterministic spatial verification.
+   - Sycophancy on Discrepancies: Simulates prompt sycophancy by accepting document text without cross-checking cadastral layers.
    - Hallucinates on unsupported entities rather than cleanly issuing a structured refusal.
+   - Cost & Latency Model: Applies commercial API token pricing assumptions ($0.01250/query) and synthetic network latency offsets.
 
 3. score_ground_truth:
-   - Unified, objective scoring function that evaluates ANY architecture's output against the ground truth.
+   - Unified, objective scoring function that evaluates ANY runner's output against the ground truth.
 """
 
 import os
@@ -41,9 +46,10 @@ from farmsync.spatial.engine import SpatialEngine
 
 class StaticPipelineRunner:
     """
-    Executable Static Pipeline Baseline Runner.
-    Fixed routing architecture without teacher escalation, metric GIS buffer tooling,
-    or FTS trust conflict gating.
+    Simulated Static Pipeline Baseline Runner.
+    Models an un-orchestrated fixed routing architecture without teacher escalation,
+    metric GIS buffer tooling, or multi-source FTS trust conflict gating.
+    Note: Executes student model locally with assumed fixed cost ($0.00085/query).
     """
     def __init__(
         self,
@@ -122,15 +128,17 @@ class StaticPipelineRunner:
             "deterministic_spatial_checks": deterministic_spatial_checks,
             "latency_ms": measured_latency_ms,
             "cost_usd": self.cost_per_query,
-            "architecture": "Static Pipeline (Fixed Routing)"
+            "architecture": "Simulated Static Pipeline (Fixed Routing Baseline)"
         }
 
 
 class PremiumVLMRunner:
     """
-    Executable Commercial Frontier VLM Baseline Runner.
-    Represents pure commercial VLM (e.g. GPT-4o / Claude-3.5-Sonnet) called directly
-    for every subtask without deterministic GIS tools or FTS Trust Verification.
+    Simulated Commercial Frontier VLM Baseline Runner.
+    Models the architectural behavior of prompt-only commercial VLMs (e.g. GPT-4o / Claude-3.5-Sonnet)
+    without deterministic GIS tools or FTS Trust Verification.
+    Note: Simulates prompt-only spatial estimation, uses token pricing assumptions ($0.01250/query)
+    and synthetic latency offsets; does not call external third-party APIs.
     """
     def __init__(
         self,
@@ -258,7 +266,7 @@ class PremiumVLMRunner:
             "deterministic_spatial_checks": deterministic_spatial_checks,
             "latency_ms": measured_latency_ms,
             "cost_usd": self.cost_per_query,
-            "architecture": "Premium-Only (Pure Commercial VLM)"
+            "architecture": "Simulated Commercial Frontier VLM (Prompt-Only Architecture Baseline)"
         }
 
 

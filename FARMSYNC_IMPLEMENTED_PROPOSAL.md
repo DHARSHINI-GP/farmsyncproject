@@ -311,43 +311,45 @@ Built on FastAPI, Leaflet GIS, and modern Glassmorphism CSS:
 * **Bedrock Live Audit Generator**: Runs real-time foundation model inference with a single click, streaming structured agronomic findings.
 
 ### 8.2 Streamlit Benchmark & Telemetry Dashboard (`http://localhost:8501`)
-* **3-Way Comparative Benchmark**: Real-time evaluation of **FARMSYNC vs. Premium-Only (GPT-4o) vs. Static Routing**.
+* **3-Way Comparative Benchmark**: Real-time evaluation of **FARMSYNC vs. Simulated Premium-Only vs. Simulated Static Routing**.
 * **Failure Injection Suite**: Demonstrates bounded escalation when image noise is introduced, and explicit abstention when document records conflict.
 * **FTS Score Breakdown**: Visual radar and bar charts decomposing the 6 observable trust signals.
 
 ---
 
-## 9. Baseline Benchmark & Empirical Evaluation
+## 9. Baseline Benchmark & Simulated Architectural Comparison
 
-To prove that adaptive orchestration adds measurable value over single-model or static pipelines, FARMSYNC was evaluated in a measured, query-by-query head-to-head empirical evaluation across 50 diverse queries with strict ground-truth verification (`data/benchmark_results.json` executed via `farmsync/benchmark/evaluator.py`).
+To evaluate how adaptive orchestration compares against un-orchestrated paradigms, FARMSYNC was evaluated across the 50-query cadastral benchmark (`data/benchmark_results.json` executed via `farmsync/benchmark/evaluator.py`).
 
-### 9.1 Overall System Comparison (Reproducible Head-to-Head 50-Query Run)
+> [!IMPORTANT]
+> **Notice on Competitor Baseline Simulation**:
+> The competitor metrics reported below reflect **simulated architectural baselines**, not live evaluations against third-party commercial APIs (such as OpenAI GPT-4o or Anthropic Claude 3.5 Sonnet).
+> * **FARMSYNC (Adaptive Orchestration)** is evaluated **live query-by-query** on the actual local open-weight vision model (MobileNetV3/CropNet), deterministic GeoPandas/Shapely GIS engine, and FTS trust verification logic.
+> * **Simulated Premium-Only Baseline** models the structural behavior of prompt-only frontier VLMs: it runs FarmSync's internal teacher vision backbone with forced escalation, assigns prompt-based spatial outcomes by query category (modeling the absence of metric polygon GIS tools through simulated estimates, such as an unverified 15m waterbody buffer distance), applies a token pricing assumption of $0.01250/query, and introduces synthetic network latency offsets (1,450ms base + jitter).
+> * **Simulated Static Pipeline Baseline** models an un-orchestrated pipeline: it runs the student vision model without teacher escalation, extracts documents without multi-source FTS conflict reconciliation, lacks metric buffer tools, and unconditionally accepts all queries under a fixed cost assumption ($0.00085/query).
+> These comparisons are intended as **architectural projections** illustrating the theoretical failure modes of un-orchestrated systems rather than measured empirical competitor benchmarks under identical live execution conditions.
 
-| Metric | Premium-Only Baseline (Pure Frontier VLM) | Static Pipeline Baseline (Fixed Routing) | FARMSYNC Adaptive Orchestration (Implemented) | Real Improvement vs Premium |
+### 9.1 Overall System Comparison (Measured FARMSYNC vs. Simulated Baselines)
+
+| Metric | Simulated Premium Baseline (Prompt-Only Frontier VLM) | Simulated Static Baseline (Fixed Routing Pipeline) | FARMSYNC Adaptive Orchestration (Measured Live Run) | Advantage vs. Simulated Premium |
 | :--- | :---: | :---: | :---: | :---: |
 | **Verified Accuracy** | 46.0% *(23/50)* | 44.0% *(22/50)* | **100.0%** *(50/50)* | **+54.0% Accuracy Gain** |
-| **Average Cost per Query** | $0.01250 | $0.00085 | **$0.00120** | **90.4% Cost Reduction** |
-| **Average Latency** | 1,632 ms | 176 ms | **236 ms** *(local)* / **311 ms** *(audit)* | **85.5% Latency Reduction** |
+| **Average Cost per Query** | $0.01250 *(assumed)* | $0.00085 *(assumed)* | **$0.00120** *(measured)* | **90.4% Cost Reduction** |
+| **Average Latency** | 1,632 ms *(synthetic)* | 176 ms *(measured)* | **236 ms** *(local)* / **311 ms** *(audit)* | **85.5% Latency Reduction** |
 | **Spatial Hallucination Rate** | 44.0% *(22/50)* | 32.0% *(16/50)* | **0.0%** *(0/50)* | **100% Hallucination Elimination** |
 | **Cost Savings vs Premium** | 0.0% | 93.2% | **90.4%** | **Optimal Verified Utility** |
-| **Bounded Recovery Guarantee** | No *(unbounded prompt loops)* | No *(static fail on noise)* | **Yes** *(Bounded 1-hop escalation/abstention)* | **Guaranteed Safe Termination** |
+| **Bounded Recovery Guarantee** | No *(unbounded prompt loops)* | No *(static fail on noise)* | **Yes** *(Bounded 1-hop recovery / abstain)* | **Guaranteed Safe Termination** |
 
-> **Evaluation Methodology & Baseline Runner Specifications**:
-> * **FARMSYNC (Adaptive Orchestration)**: Uses Verified-Utility routing to execute lightweight student vision (MobileNetV3), dynamically escalates to teacher perception only when confidence is low or noise is detected, validates legal claims against revenue registries with FTS trust gating, and computes spatial metrics via deterministic GeoPandas/Shapely GIS tooling.
-> * **Premium-Only Baseline (Pure Frontier VLM)**: Models direct prompting of commercial frontier multimodal models (e.g., GPT-4o / Claude 3.5 Sonnet class at $0.0125/call). Because pure VLMs lack UTM 44N metric polygon math, they suffer a 44% spatial hallucination rate on buffer queries and sycophantically accept legal document text without independent cross-referencing.
-> * **Static Pipeline Baseline (Fixed Routing)**: Executes lightweight student vision without teacher escalation, extracts document text without FTS trust reconciliation, lacks metric buffer tools, and naively ACCEPTS all inputs without abstaining on out-of-distribution entities.
-> *(Note: Preliminary proposal drafts cited illustrative estimates of 82.4% / 78.1% / 98.6% before the query-by-query evaluator harness was formalized; the table above reflects the exact measured empirical execution logged in `data/benchmark_results.json`.)*
+### 9.2 Category Breakdown: Measured FARMSYNC vs. Simulated Baselines (50 Queries)
 
-### 9.2 Empirical Breakdown by Operational Category (50 Queries)
-
-| Category | Queries | FARMSYNC Accuracy | Premium Baseline Accuracy | Static Baseline Accuracy | Avg Latency (ms) | Avg Cost ($) | Failure Mode in Unorchestrated Baselines |
+| Category | Queries | FARMSYNC Accuracy (Measured) | Simulated Premium Accuracy | Simulated Static Accuracy | Avg Latency (ms) | Avg Cost ($) | Simulated Unorchestrated Failure Modes |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **Confident Grounded** | 22 | **100.0%** | 68.2% | 100.0% | 170 ms | $0.00120 | Premium models introduce occasional prompt-based parsing variances. |
-| **Perception Escalation** | 8 | **100.0%** | 100.0% | 0.0% | 245 ms | $0.00120 | Static pipeline lacks escalation and misclassifies noisy/blurred field photos. |
-| **Buffer & Spatial Access** | 6 | **100.0%** | 0.0% | 0.0% | 228 ms | $0.00120 | Both baselines lack UTM 44N metric buffer math, hallucinating proximity claims. |
-| **Document Extent Discrepancy** | 8 | **100.0%** | 0.0% | 0.0% | 247 ms | $0.00120 | Premium exhibits sycophancy (trusting document blindly); Static lacks conflict gating. |
-| **Unsupported & Abstain** | 6 | **100.0%** | 0.0% | 0.0% | 458 ms | $0.00120 | Baselines hallucinate predictions instead of issuing structured abstentions. |
-| **Total / Overall** | **50** | **100.0%** | **46.0%** | **44.0%** | **236 ms** | **$0.00120** | **FARMSYNC eliminates all spatial hallucinations and sycophancy.** |
+| **Confident Grounded** | 22 | **100.0%** | 68.2% | 100.0% | 170 ms | $0.00120 | Simulated prompt parsing variance in pure VLMs. |
+| **Perception Escalation** | 8 | **100.0%** | 100.0% | 0.0% | 245 ms | $0.00120 | Static pipeline lacks escalation on blurred/noisy images. |
+| **Buffer & Spatial Access** | 6 | **100.0%** | 0.0% | 0.0% | 228 ms | $0.00120 | Both baselines lack UTM 44N metric polygon math. |
+| **Document Discrepancy** | 8 | **100.0%** | 0.0% | 0.0% | 247 ms | $0.00120 | Premium exhibits sycophancy; Static lacks conflict gating. |
+| **Unsupported & Abstain** | 6 | **100.0%** | 0.0% | 0.0% | 458 ms | $0.00120 | Baselines hallucinate guesses rather than cleanly abstaining. |
+| **Total / Overall** | **50** | **100.0%** | **46.0%** | **44.0%** | **236 ms** | **$0.00120** | **Deterministic grounding eliminates spatial hallucinations.** |
 
 ---
 
