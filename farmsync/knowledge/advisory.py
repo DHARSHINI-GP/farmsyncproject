@@ -162,17 +162,40 @@ class AgronomyKnowledgeEngine:
             "index_path": self.index_path
         }
 
+    @staticmethod
+    def _normalize_stage(stage: Optional[str]) -> str:
+        """Normalizes growth stage strings and maps standard agronomic synonyms."""
+        if not stage:
+            return ""
+        s = str(stage).strip().lower().replace("-", "_").replace(" ", "_")
+        synonyms = {
+            "mature": "full_growth",
+            "adult": "full_growth",
+            "bearing": "full_growth",
+            "vegetative": "vegetation",
+            "tillering": "vegetation",
+            "reproductive": "flowering",
+            "squaring": "flowering",
+            "pegging": "flowering"
+        }
+        return synonyms.get(s, s)
+
     def get_advisory(self, crop_name: str, growth_stage: str) -> Dict[str, Any]:
         """
         Retrieves stage-specific agronomy advisory via FAISS vector similarity search.
         
         STRICT GROUNDING POLICY:
-        - If matching crop/stage is found in the corpus with high similarity: returns source_grounded=True.
-        - If crop is unknown, unsupported, or similarity is below threshold: returns source_grounded=False
-          and found=False. Never fabricates a fictitious general advisory as 'source-grounded'.
+        - If matching crop AND matching growth stage is found in the corpus with high similarity:
+          returns source_grounded=True.
+        - If crop is unknown, unsupported, or the requested growth stage is not in the corpus:
+          returns source_grounded=False and found=False.
+        - Under the strict Refuse-to-Invent policy, a document for a DIFFERENT growth stage
+          is NEVER claimed to be source-grounded for the requested stage.
         """
         clean_crop = str(crop_name).strip()
-        clean_stage = str(growth_stage).strip().lower()
+        clean_stage = str(growth_stage).strip().lower() if growth_stage else ""
+        norm_stage = self._normalize_stage(clean_stage)
+        is_stage_unspecified = norm_stage in ("", "unspecified", "all", "any", "general", "none")
 
         # Step 1: Query construction for RAG retrieval with stage semantics
         stage_synonyms = {
@@ -180,7 +203,7 @@ class AgronomyKnowledgeEngine:
             "vegetation": "vegetation vegetative active tillering knee-high",
             "flowering": "flowering reproductive panicle squaring pegging"
         }
-        stage_expanded = stage_synonyms.get(clean_stage, clean_stage)
+        stage_expanded = stage_synonyms.get(norm_stage, clean_stage)
         query_text = (
             f"Agronomic package of practices for {clean_crop} at {stage_expanded} stage: "
             f"fertilizer schedule, nutrient application, irrigation management, and pest control."
@@ -216,14 +239,21 @@ class AgronomyKnowledgeEngine:
                     if crop_matches:
                         matching_candidates.append((float(score), cand))
 
-                # Prioritize candidate that matches requested growth stage
-                stage_matched = [c for c in matching_candidates if c[1].get("growth_stage", "").lower() == clean_stage]
-                if stage_matched:
-                    stage_matched.sort(key=lambda x: x[0], reverse=True)
-                    top_score, top_doc = stage_matched[0]
-                elif matching_candidates:
-                    matching_candidates.sort(key=lambda x: x[0], reverse=True)
-                    top_score, top_doc = matching_candidates[0]
+                # Growth stage matching check:
+                # If a specific growth stage was requested, we ONLY accept candidates that match it!
+                if is_stage_unspecified:
+                    if matching_candidates:
+                        matching_candidates.sort(key=lambda x: x[0], reverse=True)
+                        top_score, top_doc = matching_candidates[0]
+                else:
+                    stage_matched = [
+                        c for c in matching_candidates 
+                        if self._normalize_stage(c[1].get("growth_stage", "")) == norm_stage
+                    ]
+                    if stage_matched:
+                        stage_matched.sort(key=lambda x: x[0], reverse=True)
+                        top_score, top_doc = stage_matched[0]
+                    # Note: If stage_matched is empty, we strictly refuse to pick a candidate with a mismatched stage!
             except Exception as e:
                 print(f"[AgronomyKnowledgeEngine] FAISS search notice: {e}")
 
@@ -232,44 +262,81 @@ class AgronomyKnowledgeEngine:
             for d in self.corpus:
                 d_crop = d.get("crop", "").lower()
                 target_crop = clean_crop.lower()
-                if (d_crop in target_crop or target_crop in d_crop):
-                    if d.get("growth_stage", "").lower() == clean_stage:
+                crop_matches = (
+                    d_crop in target_crop or 
+                    target_crop in d_crop or
+                    ("paddy" in target_crop and "rice" in d_crop) or
+                    ("rice" in target_crop and "paddy" in d_crop)
+                )
+                if crop_matches:
+                    d_stage = self._normalize_stage(d.get("growth_stage", ""))
+                    if is_stage_unspecified:
                         top_doc = d
                         top_score = 1.00
                         break
-                    elif top_doc is None:
+                    elif d_stage == norm_stage:
                         top_doc = d
-                        top_score = 0.85
+                        top_score = 1.00
+                        break
+                    # Under Refuse-to-Invent policy, NEVER assign 0.85 or accept a mismatched growth stage!
 
         # Step 4: Strict Verification Decision
-        # If no valid corpus entry matches this crop OR similarity score is below threshold
+        # If no valid corpus entry matches this crop AND requested stage OR similarity score is below threshold
         if not top_doc or top_score < self.similarity_threshold:
+            # Check if this crop exists in the corpus at other growth stages
+            crop_available_stages = [
+                d.get("growth_stage") for d in self.corpus
+                if (
+                    d.get("crop", "").lower() in clean_crop.lower() or 
+                    clean_crop.lower() in d.get("crop", "").lower() or
+                    ("paddy" in clean_crop.lower() and "rice" in d.get("crop", "").lower()) or
+                    ("rice" in clean_crop.lower() and "paddy" in d.get("crop", "").lower())
+                )
+            ]
+
+            if crop_available_stages and not is_stage_unspecified:
+                verdict = "STAGE_MISMATCH_NO_GROUNDED_ADVISORY"
+                notice = (
+                    f"Crop '{clean_crop}' is indexed in the official TNAU/ICAR document corpus, but only for "
+                    f"growth stages: {crop_available_stages}. No verified guidelines exist for requested stage '{clean_stage}'. "
+                    f"Under the strict Refuse-to-Invent policy, mismatched growth-stage recommendations are refused "
+                    f"and never returned as source-grounded."
+                )
+                title = f"No Verified Agronomy Advisory for {clean_crop} at {clean_stage} stage"
+            else:
+                verdict = "UNVERIFIED_CROP_NO_GROUNDED_ADVISORY"
+                notice = (
+                    f"Crop '{clean_crop}' at stage '{clean_stage}' was not found in the official TNAU/ICAR "
+                    "agronomic document corpus. Under the strict Refuse-to-Invent policy, "
+                    "no fabricated guidelines are returned."
+                )
+                title = f"No Verified Agronomy Advisory for {clean_crop} ({clean_stage})"
+
             return {
                 "crop": clean_crop,
                 "growth_stage": clean_stage,
                 "found": False,
                 "source_grounded": False,
-                "advisory_title": f"No Verified Agronomy Advisory for {clean_crop} ({clean_stage})",
+                "stage_match_status": "STAGE_MISMATCH" if crop_available_stages else "CROP_NOT_FOUND",
+                "available_stages_in_corpus": crop_available_stages,
+                "advisory_title": title,
                 "fertilizer_schedule": None,
                 "water_management": None,
                 "pest_management": None,
                 "citation_source": None,
                 "retrieval_method": "FAISS_Vector_Search" if self.faiss_index else "Document_Corpus_Scan",
-                "similarity_score": round(top_score, 3),
-                "verdict": "UNVERIFIED_CROP_NO_GROUNDED_ADVISORY",
-                "notice": (
-                    f"Crop '{clean_crop}' at stage '{clean_stage}' was not found in the official TNAU/ICAR "
-                    "agronomic document corpus. Under the strict Refuse-to-Invent policy, "
-                    "no fabricated guidelines are returned."
-                )
+                "similarity_score": round(top_score, 3) if top_doc else 0.0,
+                "verdict": verdict,
+                "notice": notice
             }
 
-        # Genuine match retrieved from verified corpus
+        # Genuine match retrieved from verified corpus matching both crop and growth stage
         return {
             "crop": clean_crop,
-            "growth_stage": clean_stage,
+            "growth_stage": top_doc.get("growth_stage", clean_stage),
             "found": True,
             "source_grounded": True,
+            "stage_match_status": "EXACT_STAGE_MATCH",
             "advisory_title": top_doc.get("title"),
             "fertilizer_schedule": top_doc.get("fertilizer_schedule"),
             "water_management": top_doc.get("water_management"),
@@ -278,7 +345,7 @@ class AgronomyKnowledgeEngine:
             "doc_id": top_doc.get("doc_id"),
             "publisher": top_doc.get("publisher"),
             "page_number": top_doc.get("page_number"),
-            "retrieval_method": "FAISS_Dense_Vector_Search (all-MiniLM-L6-v2)",
+            "retrieval_method": "FAISS_Dense_Vector_Search (all-MiniLM-L6-v2)" if self.faiss_index else "Document_Corpus_Scan",
             "similarity_score": round(top_score, 3),
             "verdict": "VERIFIED_GROUNDED_ADVISORY"
         }

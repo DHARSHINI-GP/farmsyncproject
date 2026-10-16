@@ -100,3 +100,72 @@ class TestAgronomyFAISSRAG:
         assert res["source_grounded"] is False
         assert res["fertilizer_schedule"] is None
         assert res["citation_source"] is None
+
+    def test_refuse_to_claim_grounded_on_stage_mismatch_faiss(self, knowledge_engine):
+        """
+        Validates that when the crop exists in the corpus (Coconut) but the requested
+        growth stage does not (flowering), the system strictly refuses to return a
+        mismatched-stage document as source-grounded.
+        """
+        res = knowledge_engine.get_advisory("Coconut", "flowering")
+
+        assert res["found"] is False
+        assert res["source_grounded"] is False
+        assert res["verdict"] == "STAGE_MISMATCH_NO_GROUNDED_ADVISORY"
+        assert res["stage_match_status"] == "STAGE_MISMATCH"
+        assert res["fertilizer_schedule"] is None
+        assert res["water_management"] is None
+        assert res["pest_management"] is None
+        assert "full_growth" in res["available_stages_in_corpus"]
+        assert "vegetation" in res["available_stages_in_corpus"]
+        assert "mismatched growth-stage recommendations are refused" in res["notice"]
+
+    def test_corpus_scan_fallback_refuses_to_claim_grounded_on_stage_mismatch(self, knowledge_engine):
+        """
+        Validates that when FAISS index is bypassed and corpus-scan fallback runs,
+        it does NOT assign an artificial 0.85 score to a same-crop document with a
+        mismatched growth stage.
+        """
+        saved_index = knowledge_engine.faiss_index
+        try:
+            knowledge_engine.faiss_index = None
+            res = knowledge_engine.get_advisory("Coconut", "flowering")
+
+            assert res["found"] is False
+            assert res["source_grounded"] is False
+            assert res["verdict"] == "STAGE_MISMATCH_NO_GROUNDED_ADVISORY"
+            assert res["fertilizer_schedule"] is None
+            # Under the fix, score must not be 0.85 to bypass the 0.50 threshold
+            assert res["similarity_score"] < 0.50
+        finally:
+            knowledge_engine.faiss_index = saved_index
+
+    def test_corpus_scan_fallback_succeeds_on_exact_stage_match(self, knowledge_engine):
+        """
+        Validates that when FAISS index is bypassed and corpus-scan fallback runs,
+        it correctly matches when the growth stage truly matches.
+        """
+        saved_index = knowledge_engine.faiss_index
+        try:
+            knowledge_engine.faiss_index = None
+            res = knowledge_engine.get_advisory("Coconut", "full_growth")
+
+            assert res["found"] is True
+            assert res["source_grounded"] is True
+            assert res["verdict"] == "VERIFIED_GROUNDED_ADVISORY"
+            assert res["stage_match_status"] == "EXACT_STAGE_MATCH"
+            assert res["fertilizer_schedule"] is not None
+            assert res["similarity_score"] == 1.00
+            assert "Document_Corpus_Scan" in res["retrieval_method"]
+        finally:
+            knowledge_engine.faiss_index = saved_index
+
+    def test_stage_synonym_normalization(self, knowledge_engine):
+        """Validates that standard agronomic synonyms (mature -> full_growth, vegetative -> vegetation) match properly."""
+        res_mature = knowledge_engine.get_advisory("Coconut", "mature")
+        assert res_mature["found"] is True
+        assert res_mature["source_grounded"] is True
+
+        res_veg = knowledge_engine.get_advisory("Rice (Paddy)", "vegetative")
+        assert res_veg["found"] is True
+        assert res_veg["source_grounded"] is True
