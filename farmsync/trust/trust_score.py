@@ -114,38 +114,64 @@ class TrustEngine:
         has_field_photo: bool,
         has_land_doc: bool,
         has_registry: bool,
-        output_payload: Optional[Dict[str, Any]] = None
+        output_payload: Optional[Dict[str, Any]] = None,
+        workflow_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Calculates the calibrated FTS composite score and returns the verification decision.
         Uses all independent signals including measured vision_confidence and jsonschema validation.
+        When workflow_type is ENVIRONMENTAL_BUFFER_AUDIT, evidence coverage and calibration reflect
+        the modalities required for cadastral spatial verification without fabricating unprovided
+        photo or document inputs.
         """
         # 1. Historical Calibration Signal (C_cal)
-        # Directly calibrated using the measured vision confidence from the neural perception model
-        if not has_field_photo or vision_confidence <= 0.0:
-            calib_score = 0.00
-        elif not is_supported_crop:
-            # Out-of-distribution or unclassified vegetation
-            calib_score = round(min(0.40, float(vision_confidence) * 0.40), 3)
+        if workflow_type == "ENVIRONMENTAL_BUFFER_AUDIT":
+            if has_field_photo and vision_confidence > 0.0:
+                calib_factor = min(1.0, float(vision_confidence) / 0.95)
+                calib_score = round(0.92 * calib_factor, 3)
+            else:
+                # Pure GIS workflow without neural perception requirement: calibrated geometric fidelity
+                calib_score = 0.98 if spatial_extent_match else 0.00
         else:
-            # Empirical accuracy on coconut palm (0.92 benchmark from Section 3.2)
-            # Modulated proportionally by measured neural perception confidence
-            calib_factor = min(1.0, float(vision_confidence) / 0.95)
-            calib_score = round(0.92 * calib_factor, 3)
+            # Directly calibrated using the measured vision confidence from the neural perception model
+            if not has_field_photo or vision_confidence <= 0.0:
+                calib_score = 0.00
+            elif not is_supported_crop:
+                # Out-of-distribution or unclassified vegetation
+                calib_score = round(min(0.40, float(vision_confidence) * 0.40), 3)
+            else:
+                # Empirical accuracy on coconut palm (0.92 benchmark from Section 3.2)
+                # Modulated proportionally by measured neural perception confidence
+                calib_factor = min(1.0, float(vision_confidence) / 0.95)
+                calib_score = round(0.92 * calib_factor, 3)
 
         # 2. Evidence Coverage Signal (E_cov)
-        # Fraction of required independent evidence modalities present (photo, document, registry)
-        sources_present = sum([bool(has_field_photo), bool(has_land_doc), bool(has_registry)])
-        coverage_score = round(sources_present / 3.0, 3)
+        if workflow_type == "ENVIRONMENTAL_BUFFER_AUDIT":
+            # Workflow specifically evaluates cadastral parcel GIS and environmental buffers
+            # Evidence coverage measures whether the required cadastral GIS data is present
+            coverage_score = 1.00 if has_registry else 0.00
+        else:
+            # Fraction of required independent evidence modalities present (photo, document, registry)
+            sources_present = sum([bool(has_field_photo), bool(has_land_doc), bool(has_registry)])
+            coverage_score = round(sources_present / 3.0, 3)
 
         # 3. Source Consistency Signal (S_cons)
-        # Fuzzy and token-level agreement between Gazette document claims and cadastral registry
-        if has_land_doc and has_registry:
-            consistency_score = 0.95 if doc_registry_match else 0.10
-        elif has_registry or has_land_doc:
-            consistency_score = 0.90 if doc_registry_match else 0.10
+        if workflow_type == "ENVIRONMENTAL_BUFFER_AUDIT":
+            # Multi-layer spatial consistency: cadastral parcel polygon topology vs environmental buffer polygons
+            if spatial_extent_match and not waterbody_conflict:
+                consistency_score = 0.95
+            elif spatial_extent_match:
+                consistency_score = 0.50
+            else:
+                consistency_score = 0.10
         else:
-            consistency_score = 0.10
+            # Fuzzy and token-level agreement between Gazette document claims and cadastral registry
+            if has_land_doc and has_registry:
+                consistency_score = 0.95 if doc_registry_match else 0.10
+            elif has_registry or has_land_doc:
+                consistency_score = 0.90 if doc_registry_match else 0.10
+            else:
+                consistency_score = 0.10
 
         # 4. Deterministic Validation Signal (D_val)
         # GeoPandas/Shapely geometric area delta and spatial topology verification (< 0.1% delta benchmark)
@@ -159,13 +185,19 @@ class TrustEngine:
         # Strictly calculated from observed conflicts or out-of-distribution inputs.
         # When all independent evidence is complete and consistent, penalty is strictly 0.00.
         conflict_penalty = 0.0
-        if not doc_registry_match:
+        if has_land_doc and not doc_registry_match:
             conflict_penalty += 0.50
+        elif workflow_type != "ENVIRONMENTAL_BUFFER_AUDIT" and not doc_registry_match:
+            conflict_penalty += 0.50
+
         if not spatial_extent_match:
             conflict_penalty += 0.30
         if waterbody_conflict:
             conflict_penalty += 0.20
-        if not is_supported_crop:
+
+        if has_field_photo and not is_supported_crop:
+            conflict_penalty += 0.25
+        elif workflow_type != "ENVIRONMENTAL_BUFFER_AUDIT" and not is_supported_crop:
             conflict_penalty += 0.25
 
         conflict_penalty = round(min(1.0, conflict_penalty), 3)

@@ -214,6 +214,82 @@ def test_out_of_distribution_escalation(trust_engine):
     assert 0.70 <= res["fts_score"] < 0.85
 
 
+def test_environmental_buffer_audit_trust_signals(trust_engine):
+    """
+    CRITICAL AUDIT VERIFICATION:
+    Validates that in ENVIRONMENTAL_BUFFER_AUDIT:
+    1. Does NOT require fabricated field photo or deed document inputs
+    2. Uses actual supplied inputs (has_field_photo=False, has_land_doc=False)
+    3. Evaluates evidence coverage against required cadastral GIS layer
+    4. Deterministic spatial verification passes with FTS >= 0.85 (ACCEPT)
+    5. A waterbody conflict correctly penalizes the score and escalates/abstains
+    """
+    valid_payload = {
+        "survey_number": "384",
+        "village": "Keelathattaparai",
+        "extracted_attributes": {
+            "registered_owner": None,
+            "gis_area_acres": 10.349,
+            "predicted_crop": None,
+            "growth_stage": None
+        },
+        "deterministic_spatial_checks": {
+            "spatial_extent_verified": True,
+            "waterbody_buffer_compliant": True
+        }
+    }
+
+    # Case 1: Honest inputs (no photo, no deed) -> Passes with high trust based on deterministic GIS
+    res_compliant = trust_engine.evaluate_trust(
+        vision_confidence=0.0,
+        is_supported_crop=False,
+        doc_registry_match=True,
+        spatial_extent_match=True,
+        waterbody_conflict=False,
+        has_field_photo=False,
+        has_land_doc=False,
+        has_registry=True,
+        output_payload=valid_payload,
+        workflow_type="ENVIRONMENTAL_BUFFER_AUDIT"
+    )
+    assert res_compliant["decision"] == "ACCEPT"
+    assert res_compliant["fts_score"] >= 0.85
+    assert res_compliant["breakdown"]["evidence_coverage"] == 1.00
+    assert res_compliant["breakdown"]["conflict_penalty"] == 0.00
+
+    # Case 2: Waterbody conflict detected -> Penalized
+    res_conflict = trust_engine.evaluate_trust(
+        vision_confidence=0.0,
+        is_supported_crop=False,
+        doc_registry_match=True,
+        spatial_extent_match=True,
+        waterbody_conflict=True,
+        has_field_photo=False,
+        has_land_doc=False,
+        has_registry=True,
+        output_payload=valid_payload,
+        workflow_type="ENVIRONMENTAL_BUFFER_AUDIT"
+    )
+    assert res_conflict["breakdown"]["conflict_penalty"] == 0.20
+    assert res_conflict["fts_score"] < res_compliant["fts_score"]
+
+    # Case 3: Missing cadastral parcel (not in GIS layer) -> ABSTAIN
+    res_missing = trust_engine.evaluate_trust(
+        vision_confidence=0.0,
+        is_supported_crop=False,
+        doc_registry_match=True,
+        spatial_extent_match=False,
+        waterbody_conflict=False,
+        has_field_photo=False,
+        has_land_doc=False,
+        has_registry=False,
+        output_payload=valid_payload,
+        workflow_type="ENVIRONMENTAL_BUFFER_AUDIT"
+    )
+    assert res_missing["decision"] == "ABSTAIN"
+    assert res_missing["fts_score"] < 0.70
+
+
 def main():
     print("Testing TrustEngine...")
     eng = TrustEngine()
@@ -223,6 +299,7 @@ def main():
     test_jsonschema_output_validity(eng)
     test_injected_conflict_abstention(eng)
     test_out_of_distribution_escalation(eng)
+    test_environmental_buffer_audit_trust_signals(eng)
     print("ALL TRUST TESTS PASSED PERFECTLY!")
 
 

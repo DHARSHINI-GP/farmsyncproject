@@ -512,29 +512,32 @@ class FarmSyncOrchestrator:
                     "survey_number": str(context["survey_no"]) if context["survey_no"] else "UNSPECIFIED",
                     "village": context["village"],
                     "extracted_attributes": {
-                        "registered_owner": reg_check.get("official_owner") or "Verified Cadastral Landholder",
+                        "registered_owner": reg_check.get("official_owner"),
                         "document_owner": doc_claims.get("extracted_owner"),
-                        "ownership_verified": True,
-                        "ownership_status": "VERIFIED_CADASTRAL_PARCEL",
+                        "ownership_verified": bool(reg_check.get("owner_match", False) and has_land_doc and has_reg),
+                        "ownership_status": reg_check.get("owner_verification_status", "NOT_EVALUATED_GEOMETRY_AUDIT"),
+                        "parcel_geometry_verified": geom_valid,
                         "gis_area_acres": parcel_gis.get("area_acres") if parcel_gis else None,
-                        "predicted_crop": "Not Applicable (Buffer Audit)",
-                        "growth_stage": "Not Applicable"
+                        "predicted_crop": context.get("final_crop"),
+                        "growth_stage": context.get("final_stage")
                     },
                     "deterministic_spatial_checks": {
                         "spatial_extent_verified": geom_valid,
-                        "waterbody_buffer_compliant": not water_conflict if parcel_gis else False
+                        "waterbody_buffer_compliant": (not water_conflict) if parcel_gis else False,
+                        "deterministic_spatial_verified": geom_valid and ((not water_conflict) if parcel_gis else False)
                     }
                 }
                 trust_result = self.trust_engine.evaluate_trust(
-                    vision_confidence=0.95 if geom_valid else 0.0,
-                    is_supported_crop=True,
-                    doc_registry_match=True,
+                    vision_confidence=vision_result.get("confidence", 0.0) if has_photo else 0.0,
+                    is_supported_crop=bool(context.get("final_crop") and not context.get("simulate_unsupported_crop")),
+                    doc_registry_match=bool(reg_check.get("owner_match", False)) if (has_land_doc and has_reg) else True,
                     spatial_extent_match=geom_valid,
                     waterbody_conflict=water_conflict,
-                    has_field_photo=True,
-                    has_land_doc=True,
+                    has_field_photo=has_photo,
+                    has_land_doc=has_land_doc,
                     has_registry=has_parcel,
-                    output_payload=candidate_payload
+                    output_payload=candidate_payload,
+                    workflow_type="ENVIRONMENTAL_BUFFER_AUDIT"
                 )
                 context["trust_result"] = trust_result
                 return {
@@ -558,8 +561,9 @@ class FarmSyncOrchestrator:
                 "extracted_attributes": {
                     "registered_owner": reg_check.get("official_owner"),
                     "document_owner": doc_claims.get("extracted_owner"),
-                    "ownership_verified": bool(reg_check.get("owner_match", False)),
+                    "ownership_verified": bool(reg_check.get("owner_match", False) and has_land_doc and has_reg),
                     "ownership_status": reg_check.get("owner_verification_status", "UNVERIFIED"),
+                    "parcel_geometry_verified": spatial_match,
                     "gis_area_acres": parcel_gis.get("area_acres") if parcel_gis else None,
                     "predicted_crop": context.get("final_crop"),
                     "growth_stage": context.get("final_stage")
@@ -579,7 +583,8 @@ class FarmSyncOrchestrator:
                 has_field_photo=has_photo,
                 has_land_doc=has_land_doc,
                 has_registry=has_reg and has_parcel,
-                output_payload=candidate_payload
+                output_payload=candidate_payload,
+                workflow_type=wf_type
             )
             context["trust_result"] = trust_result
             return {

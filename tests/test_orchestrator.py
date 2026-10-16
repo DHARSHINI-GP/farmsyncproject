@@ -81,6 +81,47 @@ def test_agri_logistics_integration(orchestrator):
     assert "Transit:" in logistics_node["label"]
 
 
+def test_environmental_buffer_audit_workflow(orchestrator):
+    """
+    Case 5: Environmental Buffer & Spatial Audit Workflow
+    Validates that:
+    1. Workflow is compiled to ENVIRONMENTAL_BUFFER_AUDIT DAG
+    2. Does NOT fabricate has_field_photo=True or has_land_doc=True
+    3. Keeps parcel_geometry_verified separate from ownership_verified
+    4. ownership_verified is strictly False (no land doc / registry matched)
+    5. parcel_geometry_verified is True for valid Survey 384
+    6. Waterbody buffer compliance and deterministic spatial checks pass
+    7. FTS >= 0.85 and decision is VERIFIED_ACCEPT
+    """
+    query = "Check 50m waterbody buffer compliance and access road distance for Survey 384 in Keelathattaparai village."
+    res = orchestrator.execute_request(query, survey_no="384")
+    vobj = res["verified_result_object"]
+
+    # Workflow DAG verification
+    assert res["executed_dag"]["workflow_type"] == "ENVIRONMENTAL_BUFFER_AUDIT"
+    assert len(res["executed_dag"]["subtasks"]) == 4
+
+    # Separation of geometry vs ownership verification
+    attrs = vobj["extracted_attributes"]
+    assert attrs["ownership_verified"] is False
+    assert attrs["registered_owner"] is None
+    assert attrs["parcel_geometry_verified"] is True
+    assert attrs["gis_area_acres"] == 10.349
+    assert attrs["predicted_crop"] is None
+    assert attrs["document_found"] is False
+
+    # Deterministic spatial checks
+    spatial = vobj["deterministic_spatial_checks"]
+    assert spatial["geometry_valid"] is True
+    assert spatial["waterbody_buffer_50m_compliant"] is True
+    assert spatial["waterbody_buffer_conflict"] is False
+    assert spatial["deterministic_spatial_verified"] is True
+
+    # Trust Engine decision
+    assert vobj["trust_metrics"]["verification_status"] == "VERIFIED_ACCEPT"
+    assert vobj["trust_metrics"]["task_trust_score_fts"] >= 0.85
+
+
 def main():
     print("Testing FarmSyncOrchestrator End-to-End...")
     orch = FarmSyncOrchestrator()
@@ -93,6 +134,12 @@ def main():
     print("\n--- Test Case 3: Injected Conflict -> ABSTAIN / Human Review ---")
     test_injected_conflict_abstention(orch)
     print("Case 3 passed!")
+    print("\n--- Test Case 4: Agri-Logistics Integration ---")
+    test_agri_logistics_integration(orch)
+    print("Case 4 passed!")
+    print("\n--- Test Case 5: Environmental Buffer Audit Workflow ---")
+    test_environmental_buffer_audit_workflow(orch)
+    print("Case 5 passed!")
     print("\nALL END-TO-END ORCHESTRATION TESTS PASSED PERFECTLY!")
 
 
