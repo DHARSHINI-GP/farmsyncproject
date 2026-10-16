@@ -205,13 +205,18 @@ async def get_parcels():
     for s in surveys:
         p = orchestrator.spatial.get_parcel(s)
         if p:
-            meta = STATUS_MAP.get(s, {
-                "status": "Verified", 
-                "badge": "success", 
-                "date": "Oct 02, 2026", 
-                "crop": "Agricultural Land",
-                "owner": f"Landholder (Survey {s})"
-            })
+            if s in STATUS_MAP:
+                meta = STATUS_MAP[s]
+            else:
+                ror = orchestrator.docs.revenue_registry.get(str(s))
+                owner_name = ror.get("registered_owner") if ror else None
+                meta = {
+                    "status": "Not verified", 
+                    "badge": "neutral", 
+                    "date": "-", 
+                    "crop": "Unclassified",
+                    "owner": owner_name or f"Survey {s} (Unaudited)"
+                }
             results.append({
                 "survey_no": s,
                 "name": f"Survey {s} - Block {p.get('block_id', '1')}",
@@ -258,12 +263,17 @@ async def get_all_parcels_geojson():
         props = feat.get("properties", {})
         s_no = str(props.get("survey_no", ""))
         p_info = orchestrator.spatial.get_parcel(s_no)
-        meta = STATUS_MAP.get(s_no, {
-            "status": "Verified",
-            "badge": "success",
-            "crop": "Agricultural Field",
-            "owner": f"Landholder (Survey {s_no})"
-        })
+        if s_no in STATUS_MAP:
+            meta = STATUS_MAP[s_no]
+        else:
+            ror = orchestrator.docs.revenue_registry.get(s_no)
+            owner_name = ror.get("registered_owner") if ror else None
+            meta = {
+                "status": "Not verified",
+                "badge": "neutral",
+                "crop": "Unclassified",
+                "owner": owner_name or f"Survey {s_no} (Unaudited)"
+            }
         
         area = p_info["area_acres"] if p_info else round(props.get("area", 0) / 4046.86, 2)
         props["area_acres"] = area

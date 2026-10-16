@@ -706,8 +706,8 @@
               village: p.vil_name || 'Keelathattaparai',
               district: p.dist_name || 'Thoothukudi',
               area_acres: p.area_acres || 5.0,
-              status: p.status || 'Verified',
-              badge: p.badge || 'success',
+              status: p.status || 'Not verified',
+              badge: p.badge || 'neutral',
               crop: p.crop || 'Field Crop',
               owner: p.owner || `Landholder (Survey ${p.survey_no})`,
               feature: f
@@ -741,6 +741,9 @@
       } else if (s === 'Escalated') {
         fillColor = '#F59E0B';
         strokeColor = '#B45309';
+      } else if (s === 'Not verified' || s === 'Unknown') {
+        fillColor = '#64748B';
+        strokeColor = '#475569';
       }
 
       return {
@@ -805,7 +808,8 @@
         row.onclick = () => selectParcel(p.survey_no, true);
 
         const badgeColor = p.badge === 'error' ? 'bg-rose-100 text-rose-800' : 
-                          (p.badge === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800');
+                          (p.badge === 'warning' ? 'bg-amber-100 text-amber-800' : 
+                          (p.badge === 'neutral' || p.status === 'Not verified' || p.status === 'Unknown' ? 'bg-slate-100 text-slate-700' : 'bg-emerald-100 text-emerald-800'));
 
         row.innerHTML = `
           <div class="w-2/5 flex items-center space-x-2">
