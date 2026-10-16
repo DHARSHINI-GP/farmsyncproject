@@ -338,7 +338,10 @@ class FarmSyncOrchestrator:
                 "predicted_crop": vision_result.get("final_verified_crop"),
                 "confidence": vision_result.get("confidence"),
                 "shannon_entropy": vision_result.get("shannon_entropy"),
-                "has_image": vision_result.get("has_image", False)
+                "has_image": vision_result.get("has_image", False),
+                "actual_execution_model": vision_result.get("teacher_model") if vision_result.get("escalated_to_teacher") else vision_result.get("student_model"),
+                "is_independent_teacher": vision_result.get("is_independent_teacher", False),
+                "teacher_source": vision_result.get("teacher_source")
             }
 
         elif stype == "VERIFICATION_ESCALATION":
@@ -375,7 +378,10 @@ class FarmSyncOrchestrator:
             return {
                 "escalation_decision": escalation_decision,
                 "final_crop": context["final_crop"],
-                "final_stage": context["final_stage"]
+                "final_stage": context["final_stage"],
+                "actual_execution_model": vision_result.get("teacher_model") if vision_result.get("escalated_to_teacher") else vision_result.get("student_model"),
+                "is_independent_teacher": vision_result.get("is_independent_teacher", False),
+                "teacher_source": vision_result.get("teacher_source")
             }
 
         elif stype == "RAG_KNOWLEDGE":

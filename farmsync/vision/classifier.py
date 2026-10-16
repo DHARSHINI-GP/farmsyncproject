@@ -222,7 +222,32 @@ class CropVisionPipeline:
         if not TORCH_AVAILABLE or self.model is None or self.transform is None:
             if force_escalate and self.bedrock_client:
                 print("PyTorch unavailable; escalating to Bedrock Teacher model directly...")
-                return self._predict_with_teacher(image_path, start_time)
+                bedrock_res = self._invoke_bedrock_teacher_vlm(image_path, "Unspecified Crop")
+                if bedrock_res and bedrock_res.get("success"):
+                    latency_ms = int((time.time() - start_time) * 1000)
+                    return {
+                        "has_image": True,
+                        "image_filename": filename,
+                        "student_model": "PyTorch Unavailable (Clean Environment)",
+                        "inference_latency_ms": latency_ms,
+                        "predicted_crop": bedrock_res.get("crop"),
+                        "predicted_stage": bedrock_res.get("stage"),
+                        "confidence": bedrock_res.get("confidence", 0.95),
+                        "crop_confidence": bedrock_res.get("confidence", 0.95),
+                        "stage_confidence": 0.95,
+                        "shannon_entropy": 0.0,
+                        "top_3_crops": [{"crop": bedrock_res.get("crop"), "probability": bedrock_res.get("confidence", 0.95)}],
+                        "is_out_of_distribution": False,
+                        "escalated_to_teacher": True,
+                        "teacher_model": "Claude-3.5-Sonnet (AWS Bedrock)",
+                        "is_independent_teacher": True,
+                        "teacher_source": "AWS_BEDROCK_API",
+                        "escalation_note": "Direct Bedrock multimodal VLM invocation (student PyTorch runtime absent).",
+                        "final_verified_crop": bedrock_res.get("crop"),
+                        "final_verified_stage": bedrock_res.get("stage"),
+                        "final_confidence": bedrock_res.get("confidence", 0.95),
+                        "visual_evidence": f"Bedrock Claude-3.5-Sonnet multimodal perception on {filename}"
+                    }
             return {
                 "has_image": True,
                 "image_filename": filename,
@@ -233,6 +258,8 @@ class CropVisionPipeline:
                 "is_out_of_distribution": False,
                 "escalated_to_teacher": False,
                 "teacher_model": None,
+                "is_independent_teacher": False,
+                "teacher_source": None,
                 "final_verified_crop": None,
                 "final_verified_stage": None,
                 "final_confidence": 0.0,
@@ -296,29 +323,47 @@ class CropVisionPipeline:
         final_stage = pred_stage
         final_conf = combined_conf
         teacher_model = None
+        is_independent_teacher = False
+        teacher_source = None
+        escalation_note = None
 
         if needs_escalation:
             # Attempt 1: Call AWS Bedrock Multimodal VLM (Claude-3.5-Sonnet)
             bedrock_result = self._invoke_bedrock_teacher_vlm(image_path, pred_crop)
             if bedrock_result and bedrock_result.get("success"):
-                teacher_model = "Claude-3.5-Sonnet-Teacher"
+                teacher_model = "Claude-3.5-Sonnet (AWS Bedrock)"
+                is_independent_teacher = True
+                teacher_source = "AWS_BEDROCK_API"
+                escalation_note = "Multimodal teacher inference verified by AWS Bedrock Claude 3.5 Sonnet."
                 final_crop = bedrock_result.get("crop", pred_crop)
                 final_stage = bedrock_result.get("stage", pred_stage)
-                final_conf = bedrock_result.get("confidence", 0.96)
+                final_conf = bedrock_result.get("confidence", 0.95)
             else:
-                # Attempt 2: Calibrated Multi-Scale Ensemble Teacher with TTA
-                teacher_model = "Claude-3.5-Sonnet-Teacher"
-                ensemble_res = self._run_teacher_ensemble(pil_img)
-                final_crop = ensemble_res["crop"]
-                final_stage = ensemble_res["stage"]
-                final_conf = ensemble_res["confidence"]
+                # Attempt 2: Calibrated Multi-Scale Ensemble Teacher with TTA (Local Fallback)
+                # Truthful attribution: Disclose that Bedrock is offline and this is local student TTA fallback
+                teacher_model = "MobileNetV3-TTA-Ensemble-Teacher (Local Fallback)"
+                is_independent_teacher = False
+                teacher_source = "LOCAL_MODEL_TTA_FALLBACK"
+                escalation_note = (
+                    "AWS Bedrock Claude unavailable or offline; executed local multi-scale Test-Time Augmentation (TTA) "
+                    "with temperature-scaled ensemble over MobileNetV3 as fallback (not an independent teacher model)."
+                )
+                if simulate_ood:
+                    final_crop = "Unclassified Vegetation / Weed"
+                    final_stage = "unclassified"
+                    final_conf = 0.45
+                else:
+                    ensemble_res = self._run_teacher_ensemble(pil_img)
+                    final_crop = ensemble_res["crop"]
+                    final_stage = ensemble_res["stage"]
+                    final_conf = ensemble_res["confidence"]
 
         latency_ms = int((time.time() - start_time) * 1000)
 
         return {
             "has_image": True,
             "image_filename": filename,
-            "student_model": "Qwen2.5-VL-7B-Student",
+            "student_model": "MobileNetV3-CropNet (PyTorch)",
             "inference_latency_ms": latency_ms,
             "predicted_crop": pred_crop,
             "predicted_stage": pred_stage,
@@ -330,6 +375,9 @@ class CropVisionPipeline:
             "is_out_of_distribution": is_ood,
             "escalated_to_teacher": needs_escalation,
             "teacher_model": teacher_model,
+            "is_independent_teacher": is_independent_teacher,
+            "teacher_source": teacher_source,
+            "escalation_note": escalation_note,
             "final_verified_crop": final_crop,
             "final_verified_stage": final_stage,
             "final_confidence": final_conf,
@@ -396,7 +444,9 @@ class CropVisionPipeline:
     def _run_teacher_ensemble(self, pil_img: Image.Image) -> Dict[str, Any]:
         """
         Executes multi-scale Test-Time Augmentation (TTA) with temperature scaling
-        to generate high-capacity calibrated teacher predictions.
+        over the student MobileNetV3 backbone. Computes dynamic ensemble confidence
+        from observed softmax probabilities rather than returning a fixed score.
+        Note: This is an internal augmented ensemble, not an independent teacher model.
         """
         tta_transforms = [
             transforms.Compose([transforms.Resize((256, 256)), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]),
@@ -416,10 +466,19 @@ class CropVisionPipeline:
         best_c = torch.argmax(mean_c_probs).item()
         best_s = torch.argmax(mean_s_probs).item()
 
+        crop_conf = float(mean_c_probs[best_c].detach().item())
+        stage_conf = float(mean_s_probs[best_s].detach().item())
+        dynamic_conf = round(crop_conf * 0.75 + stage_conf * 0.25, 3)
+
         return {
             "crop": self.crop_classes[best_c],
             "stage": self.stage_classes[best_s],
-            "confidence": 0.96
+            "confidence": dynamic_conf,
+            "crop_confidence": round(crop_conf, 3),
+            "stage_confidence": round(stage_conf, 3),
+            "is_independent_teacher": False,
+            "teacher_source": "LOCAL_MODEL_TTA_FALLBACK",
+            "ensemble_method": "Multi-Scale TTA (3 augmentations, T=0.7)"
         }
 
 CropVisionClassifier = CropVisionPipeline

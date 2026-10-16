@@ -275,12 +275,18 @@ with tab_crop:
             st.info("Field photo preview placeholder.")
         
         st.markdown("---")
-        st.markdown(f"**Perception Model:** `{telemetry['steps'][3]['model_or_tool']}`")
+        actual_model = telemetry['steps'][3].get('actual_execution_model') or telemetry['steps'][3]['model_or_tool']
+        is_indep = telemetry['steps'][3].get('is_independent_teacher', False)
+        st.markdown(f"**Planned Route:** `{telemetry['steps'][3]['model_or_tool']}`")
+        st.markdown(f"**Runtime Execution:** `{actual_model}`")
+        if force_escalate:
+            if is_indep:
+                st.success("✅ Escalated to independent multimodal teacher: **Claude-3.5-Sonnet (AWS Bedrock)**")
+            else:
+                st.warning("⚠️ Escalated to **MobileNetV3-TTA-Ensemble-Teacher (Local Fallback)** (Bedrock offline; running multi-scale TTA ensemble over student backbone).")
         st.markdown(f"**Predicted Crop:** **`{attrs['predicted_crop']}`**")
         st.markdown(f"**Growth Stage:** **`{attrs['growth_stage']}`**")
         st.markdown(f"**Model Confidence:** `{trust['model_reported_confidence']}`")
-        if force_escalate:
-            st.warning("⚠️ Escalated to Claude-3.5-Sonnet-Teacher due to low student confidence!")
 
     with col_adv:
         st.subheader("Cited Agronomy Advisory (TNAU / ICAR)")

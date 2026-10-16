@@ -108,6 +108,13 @@ class EvidenceGraphBuilder:
                 "source_ref": vision_result.get("image_filename"),
                 "extracted_crop": crop_name,
                 "confidence": vision_result.get("final_confidence") if has_photo else 0.0,
+                "perception_model": (
+                    vision_result.get("teacher_model")
+                    if vision_result.get("escalated_to_teacher")
+                    else vision_result.get("student_model")
+                ),
+                "is_independent_teacher": vision_result.get("is_independent_teacher", False),
+                "teacher_source": vision_result.get("teacher_source"),
                 "status": "VERIFIED_PERCEIVED" if has_photo else "PHOTO_ABSENT"
             }
         ]
