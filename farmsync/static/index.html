@@ -605,6 +605,10 @@
             <option value="amazon.titan-text-express-v1">amazon.titan-text-express-v1</option>
           </select>
         </div>
+        <div>
+          <label class="font-semibold text-slate-700 block mb-1">FARMSYNC API Key (Required for remote network access)</label>
+          <input type="password" id="farmsyncApiKey" placeholder="Enter FARMSYNC_API_KEY if server is remote" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs focus:ring-2 focus:ring-brand-500/20 focus:outline-none">
+        </div>
       </div>
 
       <div class="pt-2 flex items-center justify-end space-x-2 border-t border-slate-100">
@@ -1187,11 +1191,24 @@
       submitBtn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Uploading...</span>`;
       submitBtn.disabled = true;
 
+      const uploadHeaders = {};
+      const savedApiKey = localStorage.getItem('farmsync_api_key');
+      if (savedApiKey) {
+        uploadHeaders['X-API-Key'] = savedApiKey;
+      }
+
       fetch('/api/documents/upload', {
         method: 'POST',
+        headers: uploadHeaders,
         body: formData
       })
-      .then(r => r.json())
+      .then(async r => {
+        const data = await r.json();
+        if (!r.ok) {
+          throw new Error(data.detail || `Upload failed with HTTP ${r.status}`);
+        }
+        return data;
+      })
       .then(data => {
         const select = document.getElementById('docSelectDropdown');
         const opt = document.createElement('option');
@@ -1208,10 +1225,10 @@
         executeAiQuery(`Audit Survey ${currentSurvey} against uploaded document ${data.filename}`);
       })
       .catch(err => {
-        alert("Upload error: " + err);
         submitBtn.innerHTML = `<span>Ask AI</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`;
         submitBtn.disabled = false;
         lucide.createIcons();
+        alert("Upload error: " + err.message);
       });
     }
 
@@ -1321,6 +1338,9 @@
 
     // AWS CREDENTIALS MODAL
     function openAwsModal() {
+      const savedKey = localStorage.getItem('farmsync_api_key') || '';
+      const keyInput = document.getElementById('farmsyncApiKey');
+      if (keyInput) keyInput.value = savedKey;
       document.getElementById('awsModal').classList.remove('hidden');
     }
 
@@ -1332,27 +1352,44 @@
       const keyId = document.getElementById('awsKeyId').value.trim();
       const secret = document.getElementById('awsSecretKey').value.trim();
       const session = document.getElementById('awsSessionToken').value.trim();
+      const apiKey = (document.getElementById('farmsyncApiKey') ? document.getElementById('farmsyncApiKey').value.trim() : '') || localStorage.getItem('farmsync_api_key') || '';
 
       if (!keyId || !secret) {
         alert("Please enter AWS Access Key ID and Secret Access Key.");
         return;
       }
 
+      if (apiKey) {
+        localStorage.setItem('farmsync_api_key', apiKey);
+      }
+
       const saveBtn = document.getElementById('saveAwsBtn');
       saveBtn.innerText = "Connecting...";
       saveBtn.disabled = true;
 
+      const reqHeaders = { 'Content-Type': 'application/json' };
+      if (apiKey) {
+        reqHeaders['X-API-Key'] = apiKey;
+      }
+
       fetch('/api/settings/aws', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: reqHeaders,
         body: JSON.stringify({
           access_key_id: keyId,
           secret_access_key: secret,
           session_token: session || null,
-          region: "ap-south-1"
+          region: "ap-south-1",
+          api_key: apiKey || null
         })
       })
-      .then(r => r.json())
+      .then(async r => {
+        const data = await r.json();
+        if (!r.ok) {
+          throw new Error(data.detail || `HTTP ${r.status}`);
+        }
+        return data;
+      })
       .then(st => {
         saveBtn.innerText = "Save & Connect";
         saveBtn.disabled = false;
@@ -1362,7 +1399,7 @@
       .catch(e => {
         saveBtn.innerText = "Save & Connect";
         saveBtn.disabled = false;
-        alert("Configuration error: " + e);
+        alert("Configuration error: " + e.message);
       });
     }
 

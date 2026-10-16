@@ -5,6 +5,7 @@ import json
 import time
 from collections import Counter
 import numpy as np
+from PIL import Image
 try:
     import torch
     import torch.nn as nn
@@ -121,11 +122,26 @@ def train():
             key = row.get("image_path", "").strip()
             raw_c = row.get("final_crop_name", "").strip()
             raw_s = row.get("final_crop_stage", "").strip()
+            survey_no = row.get("survey_n_1", "").strip()
+            village = row.get("village__1", "").strip()
+            taluk = row.get("taluk_co_1", "").strip()
+            dist = row.get("district_1", "").strip()
             if not key or not raw_c:
                 continue
 
             c = normalize_crop_name(raw_c)
             s = normalize_stage_name(raw_s)
+
+            # Construct genuine cadastral parcel / spatial cluster identifier
+            if survey_no:
+                parcel_id = f"P_{dist}_{taluk}_{village}_{survey_no}"
+            else:
+                lat = row.get("image_latitude", row.get("final_lat", "")).strip().split(";")[0]
+                lon = row.get("image_longitude", row.get("final_long", "")).strip().split(";")[0]
+                try:
+                    parcel_id = f"LOC_{round(float(lat), 3)}_{round(float(lon), 3)}"
+                except Exception:
+                    parcel_id = f"IMG_{key}"
 
             # Match on disk
             for df in disk_files:
@@ -136,7 +152,8 @@ def train():
                         "crop_idx": CROP_TO_IDX[c],
                         "stage_idx": STAGE_TO_IDX[s],
                         "crop_name": c,
-                        "stage_name": s
+                        "stage_name": s,
+                        "parcel_id": parcel_id
                     })
                     break
 
@@ -146,7 +163,7 @@ def train():
         if item["filename"] not in unique_samples:
             unique_samples[item["filename"]] = item
     samples = list(unique_samples.values())
-    print(f"Indexed {len(samples)} unique verified field images with ground truth labels.")
+    print(f"Indexed {len(samples)} unique verified field images with ground truth labels across {len(set(s['parcel_id'] for s in samples))} parcels.")
 
     # 2. Extract features with MobileNetV3-Small backbone
     print("Extracting 576-dim feature vectors with MobileNetV3-Small...")
@@ -164,18 +181,24 @@ def train():
     X_list = []
     y_crop_list = []
     y_stage_list = []
+    parcel_groups_list = []
 
     t0 = time.time()
     batch_size = 64
     for i in range(0, len(samples), batch_size):
         batch_samples = samples[i:i+batch_size]
         batch_tensors = []
+        valid_batch_samples = []
+
+        # STRICT ALIGNMENT: Only retain samples whose images open and preprocess successfully
         for s in batch_samples:
             try:
                 img = Image.open(s["path"]).convert("RGB")
                 batch_tensors.append(transform(img))
+                valid_batch_samples.append(s)
             except Exception as e:
-                pass
+                print(f"Warning: Corrupt or unreadable image '{s.get('filename')}': {e}. Skipping sample.")
+                continue
         
         if not batch_tensors:
             continue
@@ -185,9 +208,11 @@ def train():
             feat = avgpool(features_extractor(inp))
             feat = torch.flatten(feat, 1)
             X_list.append(feat.cpu())
-            for s in batch_samples:
+            # STRICT ALIGNMENT FIX: Append labels and parcel groups ONLY for valid, stacked image tensors
+            for s in valid_batch_samples:
                 y_crop_list.append(s["crop_idx"])
                 y_stage_list.append(s["stage_idx"])
+                parcel_groups_list.append(s["parcel_id"])
 
         if (i // batch_size) % 10 == 0:
             print(f"  Processed {min(i+batch_size, len(samples))}/{len(samples)} images (Elapsed: {time.time()-t0:.1f}s)")
@@ -195,12 +220,42 @@ def train():
     X = torch.cat(X_list, dim=0)
     y_crop = torch.tensor(y_crop_list, dtype=torch.long)
     y_stage = torch.tensor(y_stage_list, dtype=torch.long)
-    print(f"Feature tensor shape: {X.shape}, Crop labels: {y_crop.shape}, Stage labels: {y_stage.shape}")
+    parcel_groups = np.array(parcel_groups_list)
 
-    # 3. Train/Val Split (85% Train, 15% Val)
-    indices = np.random.RandomState(42).permutation(len(X))
-    split = int(0.85 * len(X))
-    train_idx, val_idx = indices[:split], indices[split:]
+    # Tensor alignment validation
+    assert len(X) == len(y_crop) == len(y_stage) == len(parcel_groups), (
+        f"CRITICAL TENSOR MISALIGNMENT: Features X={len(X)}, Crop labels={len(y_crop)}, "
+        f"Stage labels={len(y_stage)}, Parcel groups={len(parcel_groups)}"
+    )
+    print(f"Feature tensor shape: {X.shape}, Crop labels: {y_crop.shape}, Stage labels: {y_stage.shape}")
+    print(f"Total verified unique parcel groups: {len(set(parcel_groups))}")
+
+    # 3. Train/Val Split partitioned strictly by PARCEL / LOCATION (Zero Spatial Data Leakage)
+    print("Partitioning train and validation sets strictly by cadastral parcel (Grouped Split)...")
+    try:
+        from sklearn.model_selection import StratifiedGroupKFold
+        sgkf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+        train_idx, val_idx = next(sgkf.split(X.numpy(), y_crop.numpy(), groups=parcel_groups))
+    except Exception as e:
+        print(f"Notice: Using deterministic parcel group partition ({e})")
+        unique_parcels = sorted(list(set(parcel_groups)))
+        rng = np.random.RandomState(42)
+        rng.shuffle(unique_parcels)
+        n_val = max(1, int(len(unique_parcels) * 0.15))
+        val_parcels_set = set(unique_parcels[:n_val])
+        train_idx = np.array([idx for idx, g in enumerate(parcel_groups) if g not in val_parcels_set])
+        val_idx = np.array([idx for idx, g in enumerate(parcel_groups) if g in val_parcels_set])
+
+    # Assert ZERO parcel overlap between train and validation sets
+    train_parcels_set = set(parcel_groups[train_idx])
+    val_parcels_set = set(parcel_groups[val_idx])
+    parcel_overlap = train_parcels_set.intersection(val_parcels_set)
+    assert len(parcel_overlap) == 0, f"Spatial leakage detected: {len(parcel_overlap)} parcels overlap between train and val!"
+
+    print(f"Parcel-level split verified:")
+    print(f"  Training samples: {len(train_idx)} across {len(train_parcels_set)} distinct parcels")
+    print(f"  Validation samples: {len(val_idx)} across {len(val_parcels_set)} distinct parcels")
+    print(f"  Parcel overlap (spatial leakage): {len(parcel_overlap)} (STRICT ZERO)")
 
     X_train, y_c_train, y_s_train = X[train_idx], y_crop[train_idx], y_stage[train_idx]
     X_val, y_c_val, y_s_val = X[val_idx], y_crop[val_idx], y_stage[val_idx]
@@ -223,7 +278,7 @@ def train():
     optimizer = optim.AdamW(model.parameters(), lr=0.003, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=25)
 
-    print("\nTraining MultiTaskCropNet for 25 Epochs...")
+    print("\nTraining MultiTaskCropNet for 25 Epochs with Parcel-Separated Validation...")
     best_val_acc = 0.0
     best_state = None
 
@@ -239,7 +294,7 @@ def train():
             train_loss += loss.item()
         scheduler.step()
 
-        # Validation
+        # Validation on Unseen Parcels
         model.eval()
         correct_c = 0
         correct_s = 0
@@ -256,7 +311,7 @@ def train():
         crop_acc = (correct_c / total) * 100
         stage_acc = (correct_s / total) * 100
         if (epoch % 5 == 0) or (epoch == 25):
-            print(f"  Epoch {epoch:02d}/25 | Loss: {train_loss/len(train_loader):.4f} | Val Crop Acc: {crop_acc:.1f}% | Val Stage Acc: {stage_acc:.1f}%")
+            print(f"  Epoch {epoch:02d}/25 | Loss: {train_loss/len(train_loader):.4f} | Unseen Parcel Crop Acc: {crop_acc:.1f}% | Stage Acc: {stage_acc:.1f}%")
 
         if crop_acc > best_val_acc:
             best_val_acc = crop_acc
@@ -272,6 +327,12 @@ def train():
         "stage_classes": STAGE_CLASSES,
         "best_val_crop_accuracy_pct": round(best_val_acc, 2),
         "total_training_samples": len(samples),
+        "validation_split_strategy": "stratified_group_by_cadastral_parcel",
+        "train_samples_count": len(train_idx),
+        "val_samples_count": len(val_idx),
+        "train_parcels_count": len(train_parcels_set),
+        "val_parcels_count": len(val_parcels_set),
+        "parcel_leakage_overlap": 0,
         "backbone": "mobilenet_v3_small",
         "feature_dim": 576,
         "trained_timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
@@ -281,7 +342,7 @@ def train():
         json.dump(meta, f, indent=2)
     print(f"Saved model metadata to: {meta_path}")
     print("=" * 60)
-    print("TRAINING COMPLETE: Production Crop Intelligence Model Ready!")
+    print("TRAINING COMPLETE: Production Crop Intelligence Model Verified on Unseen Parcels!")
     print("=" * 60)
 
 if __name__ == "__main__":
