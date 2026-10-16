@@ -38,7 +38,7 @@ def test_trust_weights_sum_to_one(trust_engine):
 def test_proposal_benchmark_survey_384(trust_engine):
     """
     Validates that default evidence signals for Survey 384 produce exactly
-    the proposal's reported benchmark score of FTS = 0.942 and ACCEPT verdict.
+    the proposal's reported benchmark score of FTS = 0.97 (exact: 0.9705) and ACCEPT verdict.
     """
     valid_payload = {
         "survey_number": "384",

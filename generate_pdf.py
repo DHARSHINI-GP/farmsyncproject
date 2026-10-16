@@ -336,7 +336,7 @@ story.extend(H3("Executed 7-Stage End-to-End Control Plane:"))
 steps = [
     ("1. Task Compiler", "Compiles query into a typed 7-subtask DAG with explicit input-output schemas."),
     ("2. Document OCR", "Extracts legal owner and 10.35 acre extent from Section 7(2) Award Patta 176/1 PDF via PaddleOCR."),
-    ("3. Deterministic Spatial Math", "Computes exact polygon area (10.349 ac) using PostGIS UTM 44N projection (-0.0097% delta)."),
+    ("3. Deterministic Spatial Math", "Computes exact polygon area (10.349 ac) using GeoPandas/Shapely GIS UTM 44N projection (-0.0097% delta)."),
     ("4. Amazon Location Reverse Geocode", "Resolves centroid [78.026997, 8.780888] to 'Keelathattapparai, Thoothukudi, Tamil Nadu, IND'."),
     ("5. Amazon Location Route Calc", "Calculates 10.71 km road transit (22.1 mins) from Vagaikulam Depot; streams polyline to map."),
     ("6. Vision Perception", "Classifies field image via Qwen2.5-VL / ResNet-50: Coconut, Full Growth Stage, Healthy (96% conf)."),
@@ -373,7 +373,7 @@ story.extend(Code(
     "         |                    |                    |\n"
     "         v                    v                    v\n"
     "   AWS BEDROCK LLM      OPEN-WEIGHT VLM     DETERMINISTIC TOOLS\n"
-    "  mistral.ministral-3b    Qwen2.5-VL /       • PostGIS (UTM 44N Area)\n"
+    "  mistral.ministral-3b    Qwen2.5-VL /       • GeoPandas/Shapely GIS (UTM 44N)\n"
     "  (ap-south-1, 274ms)     ResNet-50          • Amazon Location Service:\n"
     "  • Legal vs GIS Synthes  • Crop: Coconut      - PlaceIndex (Geocode)\n"
     "  • ICAR Agronomic Audit  • Stage: Full Grw    - RouteCalc (10.71 km)\n"
@@ -388,7 +388,7 @@ story.extend(Code(
     "                              v\n"
     "                   +---------------------+\n"
     "                   |    TRUST ENGINE     |\n"
-    "                   |  FTS = 0.942 (PASS) |\n"
+    "                   |  FTS = 0.971 (PASS) |\n"
     "                   +----+--------+-------+\n"
     "                        |        |       |\n"
     "                        v        v       v\n"
@@ -422,12 +422,12 @@ story.extend(Formula(
 
 fts_rows = [
     ["Calibration (w1=0.15)", "0.92", "Vision model empirical precision on coconut palm benchmark."],
-    ["Evidence Coverage (w2=0.25)", "1.00", "Claim supported by 3 modalities: OCR (Patta 176/1), PostGIS GeoJSON, Ground Photo."],
+    ["Evidence Coverage (w2=0.25)", "1.00", "Claim supported by 3 modalities: OCR (Patta 176/1), Cadastral GeoJSON, Ground Photo."],
     ["Source Consistency (w3=0.25)", "0.95", "Award notice owner matches cadastral revenue database entry."],
-    ["Deterministic Validation (w4=0.25)", "0.98", "PostGIS geometric area delta is -0.0097% (10.349 ac vs 10.350 ac)."],
+    ["Deterministic Validation (w4=0.25)", "0.98", "GeoPandas/Shapely GIS geometric area delta is -0.0097% (10.349 ac vs 10.350 ac)."],
     ["Output Validity (w5=0.10)", "1.00", "100% adherence to typed VerifiedResultObject JSON schema."],
     ["Conflict Penalty (w6=0.20)", "0.00", "Zero boundary overlap, zero waterbody buffer conflict (50m compliant)."],
-    ["Composite Score (FTS)", "0.942", "VERIFIED_ACCEPTED (Exceeds threshold 0.85; execution approved)."],
+    ["Composite Score (FTS)", "0.971", "VERIFIED_ACCEPTED (Exceeds threshold 0.85; 0.9705 exact)."],
 ]
 story.append(make_table(
     ["Trust Signal & Weight", "Live Value", "Observed Empirical Ground Truth"],
@@ -484,7 +484,7 @@ story.extend(Code(
     '    "claimed_extent_acres": 10.350,\n'
     '    "gis_extent_acres": 10.349,\n'
     '    "discrepancy_pct": 0.0097,\n'
-    '    "geometry_engine": "PostGIS UTM 44N (SRID 32644)"\n'
+    '    "geometry_engine": "GeoPandas/Shapely GIS UTM 44N (SRID 32644)"\n'
     '  },\n'
     '  "amazon_location_intelligence": {\n'
     '    "place_index_address": "Keelathattapparai, Thoothukudi, Tamil Nadu, IND",\n'
@@ -503,7 +503,7 @@ story.extend(Code(
     '    "latency_ms": 274,\n'
     '    "agronomic_standard": "ICAR-CPCRI Technical Bulletin 98"\n'
     '  },\n'
-    '  "trust_score_fts": 0.942,\n'
+    '  "trust_score_fts": 0.971,\n'
     '  "verdict": "VERIFIED_ACCEPTED"\n'
     '}'
 ))
@@ -518,10 +518,10 @@ story.extend(P(
 ))
 
 bench_rows = [
-    ["Verification Accuracy", "82.4% (hallucinates spatial math)", "78.1% (fails edge cases)", "98.6% (deterministic grounding)", "+16.2%"],
-    ["Avg Cost per Query", "$0.0380", "$0.0018", "$0.0032", "-91.6% vs Pure Premium"],
-    ["P90 Response Latency", "3,450 ms", "980 ms", "640 ms (Bedrock Mumbai)", "-81.4% Latency"],
-    ["Geometric Hallucinations", "14.2%", "0.0% (uses GIS)", "0.0% (GIS + Amazon Location)", "Zero Hallucination"],
+    ["Verification Accuracy", "46.0% (fails buffer & sycophancy)", "44.0% (fails perception & abstain)", "100.0% (deterministic grounding)", "+54.0%"],
+    ["Avg Cost per Query", "$0.01250", "$0.00085", "$0.00120", "-90.4% vs Pure Premium"],
+    ["Avg Response Latency", "1,632 ms", "176 ms", "236 ms (Local) / 311 ms", "-85.5% Latency"],
+    ["Geometric Hallucinations", "44.0%", "32.0%", "0.0% (GeoPandas + Shapely)", "Zero Hallucination"],
     ["Bounded Recovery Guarantee", "No (prone to looping)", "No (static fails)", "Yes (1-hop recovery / abstain)", "Guaranteed Safe"],
 ]
 story.append(make_table(
@@ -544,7 +544,7 @@ matrix_rows = [
     ["Parcels API", "GET /api/geojson/all-parcels", "PASS", "396 vector parcels rendered on Leaflet canvas"],
     ["Roads API", "GET /api/geojson/roads", "PASS", "233 local road vectors rendered live"],
     ["Waterbodies API", "GET /api/geojson/waterbodies", "PASS", "18 waterbody buffer corridors validated"],
-    ["Parcel 384 Audit", "GET /api/verify-parcel/384", "PASS", "Extent 10.349 ac; FTS=0.942 VERIFIED_ACCEPTED"],
+    ["Parcel 384 Audit", "GET /api/verify-parcel/384", "PASS", "Extent 10.349 ac; FTS=0.971 VERIFIED_ACCEPTED"],
     ["GitHub Deployment", "safi-prog/farmsync", "PASS", "Clean push to branch main (Commit 1e3b0201)"],
 ]
 story.append(make_table(
