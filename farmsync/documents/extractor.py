@@ -48,11 +48,60 @@ class DocumentRegistryEngine:
 
     def _init_revenue_registry(self):
         """
-        Builds the independent Revenue Land Registry (Record of Rights / Patta Chitta Database)
-        maintaining official registered owner names, patta numbers, and legal title records.
-        Strictly separated from the spatial cadastral boundaries layer.
+        Initializes the independent Revenue Land Registry (Record of Rights / Patta Chitta Database).
+        
+        TRACEABLE SOURCE & PROVENANCE NOTICE:
+        -----------------------------------
+        - Dataset Type: DEMONSTRATION_BENCHMARK_FIXTURE
+        - Target Production Authority: Government of Tamil Nadu Revenue & Disaster Management Dept,
+          e-Services for Land Records (TamilNilam Patta Chitta: https://eservices.tn.gov.in)
+        - Dataset Provenance: Bundled demonstration benchmark dataset compiled for Keelathattaparai
+          village (Thoothukudi Taluk) to evaluate automated cadastral cross-verification algorithms.
+        - Demonstration Scope: These bundled records represent static demo benchmark fixtures.
+          They are NOT a live connection to the official TamilNilam / Any-ROR database (anyror.tn.gov.in).
+          Matches against this bundled registry demonstrate system verification capabilities but
+          do NOT constitute legal ownership confirmation for land transactions.
+        - Last Benchmark Freeze: 2024-03-15
         """
-        default_ror = {
+        self.revenue_registry_metadata = {
+            "registry_name": "TamilNilam_Record_of_Rights_Demonstration_Database",
+            "registry_type": "DEMONSTRATION_BENCHMARK_FIXTURE",
+            "is_authoritative_government_record": False,
+            "source_authority": "Demonstration benchmark fixture structured according to Tamil Nadu Revenue Department TamilNilam Patta Chitta schema",
+            "authoritative_source_url": "https://eservices.tn.gov.in/eservicesnew/land/chitta.html (Target Production API Schema)",
+            "last_sync_timestamp": "2024-03-15T00:00:00+05:30 (Static Hackathon Benchmark Freeze)",
+            "disclaimer": (
+                "DEMONSTRATION ONLY: Matches against this bundled registry confirm consistency with "
+                "hackathon demonstration benchmark records, NOT legal confirmation from the Government "
+                "of Tamil Nadu Revenue Department."
+            )
+        }
+
+        self.revenue_registry: Dict[str, Dict[str, Any]] = {}
+
+        # 1. Primary Load: Authentic demonstration benchmark records from Revenue_Patta_Registry.json
+        if os.path.exists(self.revenue_registry_path):
+            try:
+                with open(self.revenue_registry_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if "parcels" in data:
+                        self.revenue_registry.update(data["parcels"])
+                    if "registry_name" in data:
+                        for k in ["registry_name", "registry_type", "is_authoritative_government_record",
+                                  "source_authority", "provenance", "authoritative_source_url",
+                                  "last_sync_timestamp", "disclaimer"]:
+                            if k in data:
+                                self.revenue_registry_metadata[k] = data[k]
+            except Exception as e:
+                print(f"Warning: Could not read {self.revenue_registry_path}: {e}")
+
+        # 2. Resilient In-Memory Demonstration Fallback if JSON file is missing
+        if not self.revenue_registry:
+            self._init_fallback_demo_registry()
+
+    def _init_fallback_demo_registry(self):
+        """Minimal fallback demonstration records if external JSON file is missing."""
+        demo_parcels = {
             "384": {
                 "survey_no": "384",
                 "village": "Keelathattaparai",
@@ -63,7 +112,13 @@ class DocumentRegistryEngine:
                 "land_classification": "Dry Agricultural (Punjai)",
                 "registered_extent_acres": 10.349,
                 "registration_date": "14-06-2022",
-                "ror_status": "ACTIVE_VERIFIED"
+                "data_provenance": "DEMONSTRATION_BENCHMARK_DATA",
+                "source_authority": "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)",
+                "is_authoritative_government_record": False,
+                "last_verified_date": "2024-03-15",
+                "ror_status": "DEMO_ACTIVE",
+                "verification_tier": "DEMONSTRATION_FIXTURE",
+                "legal_disclaimer": "Demonstration benchmark record. For legal ownership confirmation, query live TamilNilam e-Services API."
             },
             "384/1": {
                 "survey_no": "384/1",
@@ -77,7 +132,13 @@ class DocumentRegistryEngine:
                 "land_classification": "Dry Agricultural (Punjai)",
                 "registered_extent_acres": 8.191,
                 "registration_date": "14-06-2022",
-                "ror_status": "ACTIVE_VERIFIED"
+                "data_provenance": "DEMONSTRATION_BENCHMARK_DATA",
+                "source_authority": "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)",
+                "is_authoritative_government_record": False,
+                "last_verified_date": "2024-03-15",
+                "ror_status": "DEMO_ACTIVE",
+                "verification_tier": "DEMONSTRATION_FIXTURE",
+                "legal_disclaimer": "Demonstration benchmark record. For legal ownership confirmation, query live TamilNilam e-Services API."
             },
             "384/2": {
                 "survey_no": "384/2",
@@ -91,7 +152,13 @@ class DocumentRegistryEngine:
                 "land_classification": "Dry Agricultural (Punjai)",
                 "registered_extent_acres": 2.067,
                 "registration_date": "14-06-2022",
-                "ror_status": "ACTIVE_VERIFIED"
+                "data_provenance": "DEMONSTRATION_BENCHMARK_DATA",
+                "source_authority": "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)",
+                "is_authoritative_government_record": False,
+                "last_verified_date": "2024-03-15",
+                "ror_status": "DEMO_ACTIVE",
+                "verification_tier": "DEMONSTRATION_FIXTURE",
+                "legal_disclaimer": "Demonstration benchmark record. For legal ownership confirmation, query live TamilNilam e-Services API."
             },
             "381": {
                 "survey_no": "381",
@@ -103,7 +170,13 @@ class DocumentRegistryEngine:
                 "land_classification": "Wet Agricultural (Nanjai)",
                 "registered_extent_acres": 4.210,
                 "registration_date": "11-03-2021",
-                "ror_status": "ACTIVE_VERIFIED"
+                "data_provenance": "DEMONSTRATION_BENCHMARK_DATA",
+                "source_authority": "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)",
+                "is_authoritative_government_record": False,
+                "last_verified_date": "2024-03-15",
+                "ror_status": "DEMO_ACTIVE",
+                "verification_tier": "DEMONSTRATION_FIXTURE",
+                "legal_disclaimer": "Demonstration benchmark record. For legal ownership confirmation, query live TamilNilam e-Services API."
             },
             "176": {
                 "survey_no": "176",
@@ -115,127 +188,13 @@ class DocumentRegistryEngine:
                 "land_classification": "Wet Agricultural (Nanjai)",
                 "registered_extent_acres": 5.120,
                 "registration_date": "20-09-2020",
-                "ror_status": "ACTIVE_VERIFIED"
-            },
-            "81": {
-                "survey_no": "81",
-                "village": "Keelathattaparai",
-                "taluk": "Thoothukudi",
-                "district": "Thoothukudi",
-                "patta_number": "810",
-                "registered_owner": "Rajesh S/o Veluchamy",
-                "land_classification": "Dry Agricultural (Punjai)",
-                "registered_extent_acres": 2.496,
-                "registration_date": "05-01-2023",
-                "ror_status": "ACTIVE_VERIFIED"
-            },
-            "83": {
-                "survey_no": "83",
-                "village": "Keelathattaparai",
-                "taluk": "Thoothukudi",
-                "district": "Thoothukudi",
-                "patta_number": "832",
-                "registered_owner": "A. Perumal Konar S/o Aathi Moolam Konar",
-                "land_classification": "Dry Agricultural (Punjai)",
-                "registered_extent_acres": 1.112,
-                "registration_date": "19-11-2021",
-                "ror_status": "ACTIVE_VERIFIED"
-            },
-            "84/1": {
-                "survey_no": "84/1",
-                "village": "Keelathattaparai",
-                "taluk": "Thoothukudi",
-                "district": "Thoothukudi",
-                "patta_number": "841",
-                "registered_owner": "Janaki Ammal W/o Kasi Perumal",
-                "land_classification": "Dry Agricultural (Punjai)",
-                "registered_extent_acres": 0.321,
-                "registration_date": "10-08-2020",
-                "ror_status": "ACTIVE_VERIFIED"
-            },
-            "84/4": {
-                "survey_no": "84/4",
-                "village": "Keelathattaparai",
-                "taluk": "Thoothukudi",
-                "district": "Thoothukudi",
-                "patta_number": "844",
-                "registered_owner": "Asir Agro Farms Private Ltd.",
-                "land_classification": "Dry Agricultural (Punjai)",
-                "registered_extent_acres": 1.878,
-                "registration_date": "28-02-2022",
-                "ror_status": "ACTIVE_VERIFIED"
-            },
-            "1/1": {
-                "survey_no": "1/1",
-                "village": "Allikulam",
-                "taluk": "Thoothukudi",
-                "district": "Thoothukudi",
-                "patta_number": "101",
-                "registered_owner": "Pearl Manisha Infra Structure Pvt. Ltd.",
-                "land_classification": "Dry Agricultural (Punjai)",
-                "registered_extent_acres": 1.495,
-                "registration_date": "15-05-2023",
-                "ror_status": "ACTIVE_VERIFIED"
-            },
-            "174": {
-                "survey_no": "174",
-                "village": "Peroorani",
-                "taluk": "Thoothukudi",
-                "district": "Thoothukudi",
-                "patta_number": "740",
-                "registered_owner": "Subramanian T S/o Thangaraj",
-                "land_classification": "Dry Agricultural (Punjai)",
-                "registered_extent_acres": 6.240,
-                "registration_date": "04-04-2021",
-                "ror_status": "ACTIVE_VERIFIED"
-            },
-            "387": {
-                "survey_no": "387",
-                "village": "Keelathattaparai",
-                "taluk": "Thoothukudi",
-                "district": "Thoothukudi",
-                "patta_number": "387",
-                "registered_owner": "Murugan S S/o Shanmugam",
-                "land_classification": "Dry Agricultural (Punjai)",
-                "registered_extent_acres": 8.500,
-                "registration_date": "18-07-2022",
-                "ror_status": "ACTIVE_VERIFIED"
-            },
-            "382": {
-                "survey_no": "382",
-                "village": "Keelathattaparai",
-                "taluk": "Thoothukudi",
-                "district": "Thoothukudi",
-                "patta_number": "382",
-                "registered_owner": "Arumugam K S/o Krishnan",
-                "land_classification": "Dry Agricultural (Punjai)",
-                "registered_extent_acres": 7.100,
-                "registration_date": "12-10-2021",
-                "ror_status": "ACTIVE_VERIFIED"
-            },
-            "388": {
-                "survey_no": "388",
-                "village": "Keelathattaparai",
-                "taluk": "Thoothukudi",
-                "district": "Thoothukudi",
-                "patta_number": "388",
-                "registered_owner": "Velmurugan P S/o Paramasivam",
-                "land_classification": "Dry Agricultural (Punjai)",
-                "registered_extent_acres": 9.400,
-                "registration_date": "30-01-2020",
-                "ror_status": "ACTIVE_VERIFIED"
-            },
-            "175": {
-                "survey_no": "175",
-                "village": "Peroorani",
-                "taluk": "Thoothukudi",
-                "district": "Thoothukudi",
-                "patta_number": "175",
-                "registered_owner": "Ponnusamy M S/o Muthusamy",
-                "land_classification": "Wet Agricultural (Nanjai)",
-                "registered_extent_acres": 3.800,
-                "registration_date": "08-09-2021",
-                "ror_status": "ACTIVE_VERIFIED"
+                "data_provenance": "DEMONSTRATION_BENCHMARK_DATA",
+                "source_authority": "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)",
+                "is_authoritative_government_record": False,
+                "last_verified_date": "2024-03-15",
+                "ror_status": "DEMO_ACTIVE",
+                "verification_tier": "DEMONSTRATION_FIXTURE",
+                "legal_disclaimer": "Demonstration benchmark record. For legal ownership confirmation, query live TamilNilam e-Services API."
             },
             "385": {
                 "survey_no": "385",
@@ -247,7 +206,13 @@ class DocumentRegistryEngine:
                 "land_classification": "Dry Agricultural (Punjai)",
                 "registered_extent_acres": 5.600,
                 "registration_date": "22-12-2022",
-                "ror_status": "ACTIVE_VERIFIED"
+                "data_provenance": "DEMONSTRATION_BENCHMARK_DATA",
+                "source_authority": "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)",
+                "is_authoritative_government_record": False,
+                "last_verified_date": "2024-03-15",
+                "ror_status": "DEMO_ACTIVE",
+                "verification_tier": "DEMONSTRATION_FIXTURE",
+                "legal_disclaimer": "Demonstration benchmark record. For legal ownership confirmation, query live TamilNilam e-Services API."
             },
             "386": {
                 "survey_no": "386",
@@ -259,19 +224,16 @@ class DocumentRegistryEngine:
                 "land_classification": "Dry Agricultural (Punjai)",
                 "registered_extent_acres": 6.750,
                 "registration_date": "17-06-2021",
-                "ror_status": "ACTIVE_VERIFIED"
+                "data_provenance": "DEMONSTRATION_BENCHMARK_DATA",
+                "source_authority": "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)",
+                "is_authoritative_government_record": False,
+                "last_verified_date": "2024-03-15",
+                "ror_status": "DEMO_ACTIVE",
+                "verification_tier": "DEMONSTRATION_FIXTURE",
+                "legal_disclaimer": "Demonstration benchmark record. For legal ownership confirmation, query live TamilNilam e-Services API."
             }
         }
-
-        self.revenue_registry = default_ror
-        if os.path.exists(self.revenue_registry_path):
-            try:
-                with open(self.revenue_registry_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if "parcels" in data:
-                        self.revenue_registry.update(data["parcels"])
-            except Exception as e:
-                print(f"Warning: Could not read {self.revenue_registry_path}: {e}")
+        self.revenue_registry.update(demo_parcels)
 
     def _init_cadastral_registry(self):
         """
@@ -849,6 +811,11 @@ class DocumentRegistryEngine:
                 "owner_verification_status": "DOCUMENT_EVIDENCE_MISSING",
                 "extent_match": False,
                 "status": "DOCUMENT_EVIDENCE_MISSING",
+                "data_provenance": revenue_record.get("data_provenance", "DEMONSTRATION_BENCHMARK_DATA") if ror_found else None,
+                "source_authority": revenue_record.get("source_authority", "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)") if ror_found else None,
+                "is_authoritative_government_record": False,
+                "last_verified_date": revenue_record.get("last_verified_date", "2024-03-15") if ror_found else None,
+                "registry_disclaimer": "Demonstration benchmark dataset; not an authoritative live government confirmation." if ror_found else "No record in demonstration registry.",
                 "details": document_claims.get("error", f"Survey {survey_no} not found in provided document"),
                 "official_extent_acres": official_extent,
                 "document_source": document_claims.get("document_source")
@@ -867,6 +834,11 @@ class DocumentRegistryEngine:
                 "patta_number": None,
                 "owner_match": False,
                 "owner_verification_status": "UNVERIFIED_NO_REGISTRY_RECORD",
+                "data_provenance": None,
+                "source_authority": None,
+                "is_authoritative_government_record": False,
+                "last_verified_date": None,
+                "registry_disclaimer": "No independent record in demonstration Record of Rights database.",
                 "official_extent_acres": official_extent if cad_found else None,
                 "document_extent_acres": doc_extent,
                 "extent_diff_acres": round(extent_diff, 3) if cad_found else None,
@@ -901,6 +873,11 @@ class DocumentRegistryEngine:
             "patta_number": revenue_record.get("patta_number"),
             "owner_match": owner_match,
             "owner_verification_status": owner_status,
+            "data_provenance": revenue_record.get("data_provenance", "DEMONSTRATION_BENCHMARK_DATA"),
+            "source_authority": revenue_record.get("source_authority", "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)"),
+            "is_authoritative_government_record": False,
+            "last_verified_date": revenue_record.get("last_verified_date", "2024-03-15"),
+            "registry_disclaimer": "Matches demonstration benchmark Record of Rights; does not constitute legal government title confirmation from TamilNilam portal.",
             "official_extent_acres": official_extent,
             "document_extent_acres": doc_extent,
             "extent_diff_acres": round(extent_diff, 3),
@@ -912,9 +889,9 @@ class DocumentRegistryEngine:
             "taluk": revenue_record.get("taluk") or (cad_record.get("taluk") if cad_found else "Thoothukudi"),
             "status": overall_status,
             "details": (
-                f"Ownership verified: Document claimant '{doc_owner}' matches Record of Rights owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')})."
+                f"Ownership consistent with demonstration Record of Rights: Document claimant '{doc_owner}' matches registered owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')}). [Notice: Verified against bundled demonstration benchmark data; not an official live government confirmation]."
                 if owner_match else
-                f"Ownership discrepancy detected: Document claimant '{doc_owner}' does NOT match official Record of Rights owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')})."
+                f"Ownership discrepancy detected: Document claimant '{doc_owner}' does NOT match demonstration Record of Rights owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')})."
             )
         }
 

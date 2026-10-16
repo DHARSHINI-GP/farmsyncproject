@@ -234,8 +234,9 @@ with tab_map:
         st.subheader("Deterministic Spatial Audit")
         st.markdown(f"**District:** {vobj['district']}")
         st.markdown(f"**Village:** {vobj['village']}")
-        st.markdown(f"**Survey Number:** `{vobj['survey_number']}`")
-        st.markdown(f"**Registered Owner:** `{attrs['registered_owner']}`")
+        owner_str = attrs.get('registered_owner') or "None (Unregistered / Absent)"
+        st.markdown(f"**Registered Owner:** `{owner_str}` *(Demonstration Fixture)*")
+        st.caption("ℹ️ *Matched against bundled TamilNilam demonstration Record of Rights dataset; not an authoritative live government portal confirmation.*")
         st.markdown(f"**GIS Calculated Area:** **`{attrs['gis_area_acres']} acres`**")
         st.markdown(f"**Documented Area:** `{attrs['documented_area_acres']} acres`")
         

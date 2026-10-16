@@ -47,7 +47,7 @@ class EvidenceGraphBuilder:
         crop_label = f"Crop: {crop_name} ({crop_stage})" if crop_name else "Crop: UNVERIFIED (No Field Image)"
         adv_title = advisory_result.get("advisory_title") or "No Grounded Advisory"
 
-        db_label = f"Registry (RoR): {reg_owner}" if reg_owner else f"Registry (RoR): NO RECORD FOR SURVEY {survey_no or 'Unspecified'}"
+        db_label = f"Demo Registry (RoR): {reg_owner}" if reg_owner else f"Demo Registry (RoR): NO RECORD FOR SURVEY {survey_no or 'Unspecified'}"
 
         nodes = [
             {"id": "claim_root", "label": f"Survey {survey_no or 'Unspecified'} Claim", "type": "ROOT"},
@@ -97,11 +97,15 @@ class EvidenceGraphBuilder:
             },
             {
                 "source_type": "DATABASE_REGISTRY",
-                "source_ref": "TamilNilam_Revenue_Record_of_Rights.parcels",
+                "source_ref": "TamilNilam_Revenue_Record_of_Rights (Demonstration Data)",
                 "extracted_value": reg_owner,
                 "patta_number": registry_check.get("patta_number"),
+                "source_authority": registry_check.get("source_authority", "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)"),
+                "data_provenance": registry_check.get("data_provenance", "DEMONSTRATION_BENCHMARK_DATA"),
+                "is_authoritative_government_record": False,
                 "confidence": 1.00 if reg_owner else 0.0,
-                "status": "FOUND_IN_REGISTRY" if reg_owner else "REGISTRY_RECORD_ABSENT"
+                "status": "FOUND_IN_DEMO_REGISTRY" if reg_owner else "REGISTRY_RECORD_ABSENT",
+                "disclaimer": registry_check.get("registry_disclaimer", "Demonstration benchmark dataset; not an authoritative live government confirmation.")
             },
             {
                 "source_type": "FIELD_PHOTOGRAPH",
@@ -140,6 +144,8 @@ class EvidenceGraphBuilder:
                 "document_owner": doc_claims.get("extracted_owner"),
                 "ownership_verified": registry_check.get("owner_match", False),
                 "ownership_status": registry_check.get("owner_verification_status", "UNVERIFIED"),
+                "ownership_provenance": registry_check.get("data_provenance", "DEMONSTRATION_BENCHMARK_DATA"),
+                "is_authoritative_government_record": False,
                 "patta_number": registry_check.get("patta_number"),
                 "gis_area_acres": parcel_gis.get("area_acres"),
                 "documented_area_acres": doc_claims.get("claimed_extent_acres"),

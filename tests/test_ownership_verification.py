@@ -205,3 +205,83 @@ def test_orchestrator_abstains_on_ownership_discrepancy(orchestrator):
     # Decision must be ABSTAIN due to ownership discrepancy
     assert vobj["trust_metrics"]["verification_status"] == "VERIFIED_ABSTAIN"
 
+
+def test_demonstration_registry_provenance_and_authoritative_source(extractor):
+    """
+    Verifies that bundled owner records are clearly labeled as demonstration benchmark data
+    with traceable source authority and disclaimers, preventing users from mistaking them
+    for live government confirmations.
+    """
+    ror_384 = extractor.revenue_registry.get("384")
+    assert ror_384 is not None
+    assert ror_384["data_provenance"] == "DEMONSTRATION_BENCHMARK_DATA"
+    assert ror_384["is_authoritative_government_record"] is False
+    assert "source_authority" in ror_384
+    assert "legal_disclaimer" in ror_384
+    assert ror_384["ror_status"] == "DEMO_ACTIVE"
+
+    # Check cross_check_registry output metadata
+    doc_claims = {
+        "found": True,
+        "extracted_owner": "Ramesh Kumar",
+        "claimed_extent_acres": 10.349,
+        "document_source": "sample_patta_384.pdf"
+    }
+    result = extractor.cross_check_registry("384", doc_claims)
+    assert result["is_authoritative_government_record"] is False
+    assert result["data_provenance"] == "DEMONSTRATION_BENCHMARK_DATA"
+    assert "source_authority" in result
+    assert "registry_disclaimer" in result
+    assert "demonstration benchmark data" in result["details"].lower()
+
+
+def test_evidence_graph_builder_records_demonstration_provenance():
+    """
+    Verifies that EvidenceGraphBuilder labels the database node as Demo Registry
+    and populates provenance metadata in extracted attributes and source evidence.
+    """
+    builder = EvidenceGraphBuilder()
+    doc_claims = {
+        "found": True,
+        "extracted_owner": "Ramesh Kumar",
+        "claimed_extent_acres": 10.349,
+        "document_source": "sample_patta_384.pdf"
+    }
+    registry_check = {
+        "registry_found": True,
+        "official_owner": "Ramesh Kumar S/o Sundaram",
+        "patta_number": "1136",
+        "owner_match": True,
+        "owner_verification_status": "OWNERSHIP_VERIFIED_MATCH",
+        "data_provenance": "DEMONSTRATION_BENCHMARK_DATA",
+        "source_authority": "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)",
+        "is_authoritative_government_record": False,
+        "registry_disclaimer": "Demonstration benchmark dataset; not an authoritative live government confirmation."
+    }
+
+    evidence_obj = builder.build_evidence_object(
+        survey_no="384",
+        village="Keelathattaparai",
+        parcel_gis={"area_acres": 10.349},
+        doc_claims=doc_claims,
+        registry_check=registry_check,
+        spatial_constraints={"cadastral_containment_valid": True},
+        vision_result={},
+        advisory_result={},
+        trust_result={"fts_score": 0.94, "decision": "ACCEPT"},
+        telemetry={}
+    )
+
+    attrs = evidence_obj["extracted_attributes"]
+    assert attrs["ownership_provenance"] == "DEMONSTRATION_BENCHMARK_DATA"
+    assert attrs["is_authoritative_government_record"] is False
+
+    nodes = {n["id"]: n for n in evidence_obj["evidence_graph_dag"]["nodes"]}
+    assert "Demo Registry (RoR)" in nodes["db_node"]["label"]
+
+    db_evidence = next(ev for ev in evidence_obj["source_evidence"] if ev["source_type"] == "DATABASE_REGISTRY")
+    assert db_evidence["data_provenance"] == "DEMONSTRATION_BENCHMARK_DATA"
+    assert db_evidence["is_authoritative_government_record"] is False
+    assert "Demonstration Data" in db_evidence["source_ref"]
+
+
