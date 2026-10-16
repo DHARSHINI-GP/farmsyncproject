@@ -167,15 +167,16 @@ class CropVisionPipeline:
         """
         clean_no = str(survey_no).strip()
         files = self.survey_image_index.get(clean_no, [])
+        if not files:
+            # Check alternate subdivision separators (e.g. 384-1, 384_1)
+            norm = clean_no.replace("-", "/").replace("_", "/")
+            files = self.survey_image_index.get(norm, [])
+            if not files:
+                dash_norm = clean_no.replace("/", "-")
+                files = self.survey_image_index.get(dash_norm, [])
+
         if files:
             first_valid = files[0]
-            if first_valid in self.image_registry:
-                return self.image_registry[first_valid]
-        
-        # Check base survey if subdivision was specified (e.g. 384/1 -> 384)
-        base = clean_no.split("/")[0]
-        if base in self.survey_image_index and self.survey_image_index[base]:
-            first_valid = self.survey_image_index[base][0]
             if first_valid in self.image_registry:
                 return self.image_registry[first_valid]
 

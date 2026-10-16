@@ -396,9 +396,8 @@ class DocumentRegistryEngine:
         if self._easyocr_reader is None:
             try:
                 import easyocr
-                self._easyocr_reader = easyocr.Reader(["en"], gpu=False)
-            except Exception as e:
-                print(f"Warning: EasyOCR not available: {e}")
+                self._easyocr_reader = easyocr.Reader(["en"], gpu=False, download_enabled=False)
+            except Exception:
                 self._easyocr_reader = None
         return self._easyocr_reader
 

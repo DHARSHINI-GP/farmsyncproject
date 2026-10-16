@@ -140,7 +140,12 @@ class TrustEngine:
 
         # 3. Source Consistency Signal (S_cons)
         # Fuzzy and token-level agreement between Gazette document claims and cadastral registry
-        consistency_score = 0.95 if doc_registry_match else 0.10
+        if has_land_doc and has_registry:
+            consistency_score = 0.95 if doc_registry_match else 0.10
+        elif has_registry or has_land_doc:
+            consistency_score = 0.90 if doc_registry_match else 0.10
+        else:
+            consistency_score = 0.10
 
         # 4. Deterministic Validation Signal (D_val)
         # GeoPandas/Shapely geometric area delta and spatial topology verification (< 0.1% delta benchmark)
