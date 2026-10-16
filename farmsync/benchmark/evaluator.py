@@ -5,7 +5,8 @@ Executes the authentic 50-query benchmark dataset across three architectures:
 2. Premium-Only (Pure Commercial VLM Baseline without Deterministic Tooling)
 3. Static Pipeline (Fixed Routing without Escalation or Trust Scoring)
 
-Produces verified, empirical accuracy, cost, latency, and hallucination metrics.
+Produces verified, empirical accuracy, cost, latency, and hallucination metrics
+evaluated query-by-query against the exact same ground-truth criteria.
 """
 
 import os
@@ -14,15 +15,26 @@ import json
 from typing import Dict, Any, List, Optional
 
 from farmsync.benchmark.dataset import get_benchmark_queries, save_benchmark_queries_json
+from farmsync.benchmark.baselines import StaticPipelineRunner, PremiumVLMRunner, score_ground_truth
 from farmsync.orchestrator import FarmSyncOrchestrator
 
 
 class BenchmarkEvaluator:
     """
     Empirical evaluation harness comparing FARMSYNC against commercial and static baselines.
+    Executes each baseline runner query-by-query against identical ground-truth targets.
     """
     def __init__(self, orchestrator: Optional[FarmSyncOrchestrator] = None):
         self.orchestrator = orchestrator or FarmSyncOrchestrator()
+        self.static_runner = StaticPipelineRunner(
+            vision_pipeline=self.orchestrator.vision,
+            doc_engine=self.orchestrator.docs,
+            spatial_engine=self.orchestrator.spatial
+        )
+        self.premium_runner = PremiumVLMRunner(
+            vision_pipeline=self.orchestrator.vision,
+            doc_engine=self.orchestrator.docs
+        )
         self.base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.results_path = os.path.join(self.base_dir, "data", "benchmark_results.json")
 
@@ -48,8 +60,6 @@ class BenchmarkEvaluator:
             cat = q["category"]
             survey_no = q.get("survey_no")
             query_str = q["query"]
-            expected_crop = q.get("expected_crop")
-            expected_decision = q.get("expected_decision")
             force_esc = q.get("force_escalate", False)
             sim_conflict = q.get("simulate_conflict", False)
 
@@ -61,7 +71,7 @@ class BenchmarkEvaluator:
                 force_escalate_vision=force_esc,
                 simulate_conflict=sim_conflict
             )
-            elapsed_ms = int((time.time() - t_start) * 1000)
+            fs_elapsed_ms = int((time.time() - t_start) * 1000)
 
             vobj = orch_res["verified_result_object"]
             trust_metrics = vobj["trust_metrics"]
@@ -74,117 +84,83 @@ class BenchmarkEvaluator:
             if cost_usd == 0:
                 cost_usd = 0.00085 if not force_esc else 0.0088
 
-            # Truthful Ground-Truth Accuracy Evaluation
-            is_accurate = False
-            if cat == "CONFIDENT_GROUNDED":
-                # Accurate iff accepted, crop matches ground truth, and extent matches cadastral GIS
-                crop_ok = (pred_crop == expected_crop) if expected_crop else True
-                extent_ok = (pred_acres is not None and abs(pred_acres - q["gis_acres"]) / q["gis_acres"] < 0.05) if q.get("gis_acres") else True
-                is_accurate = (actual_decision == "ACCEPT" and crop_ok and extent_ok)
+            # Verify actual teacher execution from telemetry (NO artificial 'or force_esc')
+            telemetry_steps = vobj.get("routing_telemetry", {}).get("steps", [])
+            source_ev = vobj.get("source_evidence", [])
+            actual_teacher_execution = (
+                vobj.get("routing_telemetry", {}).get("escalated_to_teacher", False) or
+                any(
+                    step.get("escalation_decision") == "ESCALATED_TO_TEACHER" or 
+                    "Teacher" in str(step.get("model_or_tool", "")) or
+                    "Teacher" in str(step.get("actual_execution_model", ""))
+                    for step in telemetry_steps
+                ) or
+                any(
+                    "Teacher" in str(ev.get("perception_model", ""))
+                    for ev in source_ev
+                )
+            )
 
-            elif cat == "BUFFER_AND_ACCESS":
-                # Accurate iff accepted, deterministic buffer check completed, and extent matches GIS
-                extent_ok = (pred_acres is not None and abs(pred_acres - q["gis_acres"]) / q["gis_acres"] < 0.05) if q.get("gis_acres") else True
-                is_accurate = (actual_decision == "ACCEPT" and extent_ok)
+            fs_res_payload = {
+                "decision": actual_decision,
+                "predicted_crop": pred_crop,
+                "gis_area_acres": pred_acres,
+                "escalated_to_teacher": actual_teacher_execution,
+                "deterministic_spatial_checks": vobj.get("deterministic_spatial_checks", {}),
+                "conflict_detected": trust_metrics.get("signal_breakdown", {}).get("conflict_penalty", 0.0) > 0.0,
+                "conflict_penalty": trust_metrics.get("signal_breakdown", {}).get("conflict_penalty", 0.0)
+            }
 
-            elif cat == "PERCEPTION_ESCALATION":
-                # Accurate iff escalated to teacher and predicted correct crop
-                escalated = vobj.get("routing_telemetry", {}).get("escalated_to_teacher", False) or force_esc
-                crop_ok = (pred_crop == expected_crop)
-                is_accurate = (escalated and crop_ok and actual_decision == "ACCEPT")
-
-            elif cat == "DOCUMENT_EXTENT_DISCREPANCY":
-                # Accurate iff the system detected conflict and correctly ABSTAINED / flagged discrepancy
-                has_penalty = trust_metrics.get("signal_breakdown", {}).get("conflict_penalty", 0.0) > 0.0
-                is_accurate = (actual_decision == "ABSTAIN" and has_penalty)
-
-            elif cat == "UNSUPPORTED_AND_ABSTAIN":
-                # Accurate iff the system strictly refused to invent and ABSTAINED
-                is_accurate = (actual_decision == "ABSTAIN" and pred_crop is None and pred_acres is None)
+            fs_is_accurate, fs_spatial_halluc = score_ground_truth(q, fs_res_payload)
 
             farmsync_record = {
                 "id": q_id,
                 "category": cat,
-                "latency_ms": elapsed_ms,
+                "latency_ms": fs_elapsed_ms,
                 "cost_usd": round(cost_usd, 5),
-                "accuracy": 1.0 if is_accurate else 0.0,
-                "hallucinated_spatial": 0.0,
+                "accuracy": 1.0 if fs_is_accurate else 0.0,
+                "hallucinated_spatial": fs_spatial_halluc,
                 "decision": actual_decision
             }
             farmsync_results.append(farmsync_record)
 
-            # ── 2. Evaluate Premium-Only Baseline (Pure GPT-4o) ───────────────
-            # Pure commercial VLM: heavy cost ($0.01250), high latency (~1,850ms),
-            # hallucinates spatial/buffer geometry (~18% error), sycophantic on conflicts (~25% error).
-            prem_latency = 1850 + int((idx % 7) * 45 - 135)
-            prem_cost = 0.01250
-
-            if cat == "CONFIDENT_GROUNDED":
-                prem_acc = 0.95
-                prem_spatial_hallucination = 0.05
-            elif cat == "PERCEPTION_ESCALATION":
-                prem_acc = 0.90 # Strong multimodal reasoning
-                prem_spatial_hallucination = 0.10
-            elif cat == "BUFFER_AND_ACCESS":
-                prem_acc = 0.70 # Hallucinates metric buffer distance calculations
-                prem_spatial_hallucination = 0.40
-            elif cat == "DOCUMENT_EXTENT_DISCREPANCY":
-                prem_acc = 0.65 # Sychophancy: agrees with document inflation without checking cadastral layer
-                prem_spatial_hallucination = 0.20
-            elif cat == "UNSUPPORTED_AND_ABSTAIN":
-                prem_acc = 0.75 # Overconfident guessing instead of clean refusal
-                prem_spatial_hallucination = 0.25
-            else:
-                prem_acc = 0.80
-                prem_spatial_hallucination = 0.15
+            # ── 2. Evaluate Premium-Only Baseline (Pure Frontier VLM) ─────────
+            # Executed query-by-query via PremiumVLMRunner
+            prem_res = self.premium_runner.execute_query(q)
+            prem_is_accurate, prem_spatial_halluc = score_ground_truth(q, prem_res)
 
             premium_record = {
                 "id": q_id,
                 "category": cat,
-                "latency_ms": prem_latency,
-                "cost_usd": prem_cost,
-                "accuracy": prem_acc,
-                "hallucinated_spatial": prem_spatial_hallucination
+                "latency_ms": prem_res["latency_ms"],
+                "cost_usd": prem_res["cost_usd"],
+                "accuracy": 1.0 if prem_is_accurate else 0.0,
+                "hallucinated_spatial": prem_spatial_halluc,
+                "decision": prem_res["decision"]
             }
             premium_results.append(premium_record)
 
             # ── 3. Evaluate Static Pipeline Baseline (Fixed Routing) ──────────
-            # Fixed model: low cost ($0.00085), low latency (~220ms),
-            # lacks escalation on ambiguous images, lacks FTS trust conflict gating.
-            static_latency = 220 + int((idx % 5) * 15 - 30)
-            static_cost = 0.00085
-
-            if cat == "CONFIDENT_GROUNDED":
-                static_acc = 0.88
-                static_spatial_hallucination = 0.0
-            elif cat == "PERCEPTION_ESCALATION":
-                static_acc = 0.50 # No teacher escalation on hard images
-                static_spatial_hallucination = 0.0
-            elif cat == "BUFFER_AND_ACCESS":
-                static_acc = 0.85
-                static_spatial_hallucination = 0.0
-            elif cat == "DOCUMENT_EXTENT_DISCREPANCY":
-                static_acc = 0.40 # Lacks trust engine conflict penalty
-                static_spatial_hallucination = 0.0
-            elif cat == "UNSUPPORTED_AND_ABSTAIN":
-                static_acc = 0.35 # Fabricates guesses instead of clean abstention
-                static_spatial_hallucination = 0.50
-            else:
-                static_acc = 0.65
-                static_spatial_hallucination = 0.10
+            # Executed query-by-query via StaticPipelineRunner
+            stat_res = self.static_runner.execute_query(q)
+            stat_is_accurate, stat_spatial_halluc = score_ground_truth(q, stat_res)
 
             static_record = {
                 "id": q_id,
                 "category": cat,
-                "latency_ms": static_latency,
-                "cost_usd": static_cost,
-                "accuracy": static_acc,
-                "hallucinated_spatial": static_spatial_hallucination
+                "latency_ms": stat_res["latency_ms"],
+                "cost_usd": stat_res["cost_usd"],
+                "accuracy": 1.0 if stat_is_accurate else 0.0,
+                "hallucinated_spatial": stat_spatial_halluc,
+                "decision": stat_res["decision"]
             }
             static_results.append(static_record)
 
             if idx % 10 == 0 or idx == total_q:
-                print(f"  Evaluated {idx:02d}/{total_q} queries... (Current FARMSYNC Accuracy: {sum(r['accuracy'] for r in farmsync_results)/len(farmsync_results)*100:.1f}%)")
+                fs_curr = sum(r['accuracy'] for r in farmsync_results) / len(farmsync_results) * 100
+                prem_curr = sum(r['accuracy'] for r in premium_results) / len(premium_results) * 100
+                stat_curr = sum(r['accuracy'] for r in static_results) / len(static_results) * 100
+                print(f"  Evaluated {idx:02d}/{total_q} queries... [FarmSync: {fs_curr:.1f}% | Prem: {prem_curr:.1f}% | Static: {stat_curr:.1f}%]")
 
         # ── Aggregate Benchmark Metrics ───────────────────────────────────────
         def compute_summary(records, name, architecture):
@@ -201,7 +177,7 @@ class BenchmarkEvaluator:
                 "average_cost_usd": round(avg_cost, 5),
                 "average_latency_ms": int(avg_latency),
                 "spatial_hallucination_rate_pct": round(hallucination_pct, 1),
-                "cost_savings_vs_premium_pct": round((1.0 - (avg_cost / 0.01250)) * 100.0, 1) if name != "Premium-Only" else 0.0
+                "cost_savings_vs_premium_pct": round((1.0 - (avg_cost / 0.01250)) * 100.0, 1) if name != "Premium-Only (Pure Frontier VLM)" else 0.0
             }
 
         farmsync_summary = compute_summary(
@@ -211,7 +187,7 @@ class BenchmarkEvaluator:
         )
         premium_summary = compute_summary(
             premium_results,
-            "Premium-Only (Pure GPT-4o)",
+            "Premium-Only (Pure Frontier VLM)",
             "Pure commercial VLM called for every subtask without deterministic GIS"
         )
         static_summary = compute_summary(
@@ -223,13 +199,18 @@ class BenchmarkEvaluator:
         # Category-level breakdown for FARMSYNC
         cat_stats = {}
         for cat in ["CONFIDENT_GROUNDED", "PERCEPTION_ESCALATION", "BUFFER_AND_ACCESS", "DOCUMENT_EXTENT_DISCREPANCY", "UNSUPPORTED_AND_ABSTAIN"]:
-            subset = [r for r in farmsync_results if r["category"] == cat]
-            if subset:
+            subset_fs = [r for r in farmsync_results if r["category"] == cat]
+            subset_prem = [r for r in premium_results if r["category"] == cat]
+            subset_stat = [r for r in static_results if r["category"] == cat]
+
+            if subset_fs:
                 cat_stats[cat] = {
-                    "total_queries": len(subset),
-                    "accuracy_pct": round((sum(r["accuracy"] for r in subset) / len(subset)) * 100, 1),
-                    "avg_latency_ms": int(sum(r["latency_ms"] for r in subset) / len(subset)),
-                    "avg_cost_usd": round(sum(r["cost_usd"] for r in subset) / len(subset), 5)
+                    "total_queries": len(subset_fs),
+                    "farmsync_accuracy_pct": round((sum(r["accuracy"] for r in subset_fs) / len(subset_fs)) * 100, 1),
+                    "premium_accuracy_pct": round((sum(r["accuracy"] for r in subset_prem) / len(subset_prem)) * 100, 1) if subset_prem else 0.0,
+                    "static_accuracy_pct": round((sum(r["accuracy"] for r in subset_stat) / len(subset_stat)) * 100, 1) if subset_stat else 0.0,
+                    "avg_latency_ms": int(sum(r["latency_ms"] for r in subset_fs) / len(subset_fs)),
+                    "avg_cost_usd": round(sum(r["cost_usd"] for r in subset_fs) / len(subset_fs), 5)
                 }
 
         benchmark_data = {
@@ -243,7 +224,11 @@ class BenchmarkEvaluator:
                 "Static_Routing": static_summary
             },
             "category_breakdown": cat_stats,
-            "detailed_query_results": farmsync_results
+            "detailed_query_results": farmsync_results,
+            "detailed_competitor_results": {
+                "premium_only": premium_results,
+                "static_pipeline": static_results
+            }
         }
 
         # Save to disk

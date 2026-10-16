@@ -423,19 +423,19 @@ with tab_baselines:
                     "Cost Savings": f"{b_summary.get('FARMSYNC', {}).get('cost_savings_vs_premium_pct', 90.4)}%"
                 },
                 {
-                    "Architecture": "Premium-Only (Pure GPT-4o)",
-                    "Measured Accuracy": f"{b_summary.get('Premium_Only', {}).get('verified_accuracy_pct', 84.0)}%",
+                    "Architecture": "Premium-Only (Pure Frontier VLM)",
+                    "Measured Accuracy": f"{b_summary.get('Premium_Only', {}).get('verified_accuracy_pct', 46.0)}%",
                     "Avg Cost ($)": f"${b_summary.get('Premium_Only', {}).get('average_cost_usd', 0.0125):.5f}",
-                    "Avg Latency (ms)": f"{b_summary.get('Premium_Only', {}).get('average_latency_ms', 1848)} ms",
-                    "Spatial Hallucinations": f"{b_summary.get('Premium_Only', {}).get('spatial_hallucination_rate_pct', 18.0)}%",
+                    "Avg Latency (ms)": f"{b_summary.get('Premium_Only', {}).get('average_latency_ms', 1632)} ms",
+                    "Spatial Hallucinations": f"{b_summary.get('Premium_Only', {}).get('spatial_hallucination_rate_pct', 44.0)}%",
                     "Cost Savings": "0.0%"
                 },
                 {
                     "Architecture": "Static Routing (No Verifier)",
-                    "Measured Accuracy": f"{b_summary.get('Static_Routing', {}).get('verified_accuracy_pct', 67.5)}%",
+                    "Measured Accuracy": f"{b_summary.get('Static_Routing', {}).get('verified_accuracy_pct', 44.0)}%",
                     "Avg Cost ($)": f"${b_summary.get('Static_Routing', {}).get('average_cost_usd', 0.00085):.5f}",
-                    "Avg Latency (ms)": f"{b_summary.get('Static_Routing', {}).get('average_latency_ms', 220)} ms",
-                    "Spatial Hallucinations": f"{b_summary.get('Static_Routing', {}).get('spatial_hallucination_rate_pct', 20.0)}%",
+                    "Avg Latency (ms)": f"{b_summary.get('Static_Routing', {}).get('average_latency_ms', 176)} ms",
+                    "Spatial Hallucinations": f"{b_summary.get('Static_Routing', {}).get('spatial_hallucination_rate_pct', 32.0)}%",
                     "Cost Savings": f"{b_summary.get('Static_Routing', {}).get('cost_savings_vs_premium_pct', 93.2)}%"
                 }
             ]

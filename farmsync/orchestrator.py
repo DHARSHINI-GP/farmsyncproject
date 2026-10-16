@@ -72,17 +72,17 @@ class FarmSyncOrchestrator:
                 "cost_savings_vs_premium_pct": 90.4
             },
             "Premium_Only": {
-                "verified_accuracy_pct": 84.0,
+                "verified_accuracy_pct": 46.0,
                 "average_cost_usd": 0.01250,
-                "average_latency_ms": 1848,
-                "spatial_hallucination_rate_pct": 18.0,
+                "average_latency_ms": 1632,
+                "spatial_hallucination_rate_pct": 44.0,
                 "cost_savings_vs_premium_pct": 0.0
             },
             "Static_Routing": {
-                "verified_accuracy_pct": 67.5,
+                "verified_accuracy_pct": 44.0,
                 "average_cost_usd": 0.00085,
-                "average_latency_ms": 220,
-                "spatial_hallucination_rate_pct": 20.0,
+                "average_latency_ms": 176,
+                "spatial_hallucination_rate_pct": 32.0,
                 "cost_savings_vs_premium_pct": 93.2
             }
         }
@@ -192,10 +192,17 @@ class FarmSyncOrchestrator:
         total_latency_ms = int((time.time() - start_time) * 1000)
 
         # Step 4: Build Telemetry Summary
+        has_escalated = any(
+            step.get("escalation_decision") == "ESCALATED_TO_TEACHER" or 
+            "Teacher" in str(step.get("model_or_tool", "")) or
+            "Teacher" in str(step.get("actual_execution_model", ""))
+            for step in telemetry_steps
+        )
         telemetry_summary = {
             "total_latency_ms": total_latency_ms,
             "total_estimated_cost_usd": round(total_cost, 5),
             "step_count": len(telemetry_steps),
+            "escalated_to_teacher": has_escalated,
             "steps": telemetry_steps
         }
 
@@ -247,23 +254,23 @@ class FarmSyncOrchestrator:
                 "architecture": "Pure Commercial GPT-4o for every subtask",
                 "cost_usd": 0.01250,
                 "latency_ms": 1850,
-                "verified_accuracy_pct": prem_bench.get("verified_accuracy_pct", 84.0),
-                "hallucination_rate_pct": prem_bench.get("spatial_hallucination_rate_pct", 18.0),
+                "verified_accuracy_pct": prem_bench.get("verified_accuracy_pct", 46.0),
+                "hallucination_rate_pct": prem_bench.get("spatial_hallucination_rate_pct", 44.0),
                 "cost_savings_vs_premium_pct": 0.0,
-                "benchmark_measured_accuracy_pct": prem_bench.get("verified_accuracy_pct", 84.0),
+                "benchmark_measured_accuracy_pct": prem_bench.get("verified_accuracy_pct", 46.0),
                 "benchmark_avg_cost_usd": prem_bench.get("average_cost_usd", 0.01250),
-                "benchmark_avg_latency_ms": prem_bench.get("average_latency_ms", 1848)
+                "benchmark_avg_latency_ms": prem_bench.get("average_latency_ms", 1632)
             },
             "Static_Routing": {
                 "architecture": "Fixed model assignment without trust scoring or escalation",
                 "cost_usd": 0.00085,
-                "latency_ms": 220,
-                "verified_accuracy_pct": stat_bench.get("verified_accuracy_pct", 67.5),
-                "hallucination_rate_pct": stat_bench.get("spatial_hallucination_rate_pct", 20.0),
+                "latency_ms": 176,
+                "verified_accuracy_pct": stat_bench.get("verified_accuracy_pct", 44.0),
+                "hallucination_rate_pct": stat_bench.get("spatial_hallucination_rate_pct", 32.0),
                 "cost_savings_vs_premium_pct": round((1.0 - (0.00085 / 0.0125)) * 100, 1),
-                "benchmark_measured_accuracy_pct": stat_bench.get("verified_accuracy_pct", 67.5),
+                "benchmark_measured_accuracy_pct": stat_bench.get("verified_accuracy_pct", 44.0),
                 "benchmark_avg_cost_usd": stat_bench.get("average_cost_usd", 0.00085),
-                "benchmark_avg_latency_ms": stat_bench.get("average_latency_ms", 220)
+                "benchmark_avg_latency_ms": stat_bench.get("average_latency_ms", 176)
             }
         }
 

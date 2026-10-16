@@ -1,6 +1,6 @@
 {
   "benchmark_suite": "FARMSYNC 50-Query Head-to-Head Multimodal Cadastral Benchmark",
-  "evaluation_timestamp": "2026-10-16 23:32:03",
+  "evaluation_timestamp": "2026-10-17 00:34:05",
   "total_queries": 50,
   "methodology": "Measured head-to-head empirical evaluation across 50 diverse queries with ground-truth verification",
   "summary": {
@@ -10,60 +10,70 @@
       "total_queries_evaluated": 50,
       "verified_accuracy_pct": 100.0,
       "average_cost_usd": 0.0012,
-      "average_latency_ms": 311,
+      "average_latency_ms": 236,
       "spatial_hallucination_rate_pct": 0.0,
       "cost_savings_vs_premium_pct": 90.4
     },
     "Premium_Only": {
-      "name": "Premium-Only (Pure GPT-4o)",
+      "name": "Premium-Only (Pure Frontier VLM)",
       "architecture": "Pure commercial VLM called for every subtask without deterministic GIS",
       "total_queries_evaluated": 50,
-      "verified_accuracy_pct": 84.0,
+      "verified_accuracy_pct": 46.0,
       "average_cost_usd": 0.0125,
-      "average_latency_ms": 1848,
-      "spatial_hallucination_rate_pct": 14.8,
+      "average_latency_ms": 1632,
+      "spatial_hallucination_rate_pct": 44.0,
       "cost_savings_vs_premium_pct": 0.0
     },
     "Static_Routing": {
       "name": "Static Pipeline (Fixed Routing)",
       "architecture": "Fixed model assignment without escalation, GIS tools, or FTS trust gating",
       "total_queries_evaluated": 50,
-      "verified_accuracy_pct": 67.5,
+      "verified_accuracy_pct": 44.0,
       "average_cost_usd": 0.00085,
-      "average_latency_ms": 220,
-      "spatial_hallucination_rate_pct": 6.0,
+      "average_latency_ms": 176,
+      "spatial_hallucination_rate_pct": 32.0,
       "cost_savings_vs_premium_pct": 93.2
     }
   },
   "category_breakdown": {
     "CONFIDENT_GROUNDED": {
       "total_queries": 22,
-      "accuracy_pct": 100.0,
-      "avg_latency_ms": 213,
+      "farmsync_accuracy_pct": 100.0,
+      "premium_accuracy_pct": 68.2,
+      "static_accuracy_pct": 100.0,
+      "avg_latency_ms": 170,
       "avg_cost_usd": 0.0012
     },
     "PERCEPTION_ESCALATION": {
       "total_queries": 8,
-      "accuracy_pct": 100.0,
-      "avg_latency_ms": 317,
+      "farmsync_accuracy_pct": 100.0,
+      "premium_accuracy_pct": 100.0,
+      "static_accuracy_pct": 0.0,
+      "avg_latency_ms": 245,
       "avg_cost_usd": 0.0012
     },
     "BUFFER_AND_ACCESS": {
       "total_queries": 6,
-      "accuracy_pct": 100.0,
-      "avg_latency_ms": 258,
+      "farmsync_accuracy_pct": 100.0,
+      "premium_accuracy_pct": 0.0,
+      "static_accuracy_pct": 0.0,
+      "avg_latency_ms": 228,
       "avg_cost_usd": 0.0012
     },
     "DOCUMENT_EXTENT_DISCREPANCY": {
       "total_queries": 8,
-      "accuracy_pct": 100.0,
-      "avg_latency_ms": 347,
+      "farmsync_accuracy_pct": 100.0,
+      "premium_accuracy_pct": 0.0,
+      "static_accuracy_pct": 0.0,
+      "avg_latency_ms": 247,
       "avg_cost_usd": 0.0012
     },
     "UNSUPPORTED_AND_ABSTAIN": {
       "total_queries": 6,
-      "accuracy_pct": 100.0,
-      "avg_latency_ms": 664,
+      "farmsync_accuracy_pct": 100.0,
+      "premium_accuracy_pct": 0.0,
+      "static_accuracy_pct": 0.0,
+      "avg_latency_ms": 458,
       "avg_cost_usd": 0.0012
     }
   },
@@ -71,7 +81,7 @@
     {
       "id": "BENCH-01",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 1226,
+      "latency_ms": 1129,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -80,7 +90,7 @@
     {
       "id": "BENCH-02",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 135,
+      "latency_ms": 87,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -89,7 +99,7 @@
     {
       "id": "BENCH-03",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 148,
+      "latency_ms": 110,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -98,7 +108,7 @@
     {
       "id": "BENCH-04",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 142,
+      "latency_ms": 114,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -107,7 +117,7 @@
     {
       "id": "BENCH-05",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 231,
+      "latency_ms": 166,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -116,7 +126,7 @@
     {
       "id": "BENCH-06",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 168,
+      "latency_ms": 107,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -125,7 +135,7 @@
     {
       "id": "BENCH-07",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 148,
+      "latency_ms": 104,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -134,7 +144,7 @@
     {
       "id": "BENCH-08",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 355,
+      "latency_ms": 276,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -143,7 +153,7 @@
     {
       "id": "BENCH-09",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 132,
+      "latency_ms": 90,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -152,7 +162,7 @@
     {
       "id": "BENCH-10",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 154,
+      "latency_ms": 123,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -161,7 +171,7 @@
     {
       "id": "BENCH-11",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 148,
+      "latency_ms": 112,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -170,7 +180,7 @@
     {
       "id": "BENCH-12",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 151,
+      "latency_ms": 125,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -179,7 +189,7 @@
     {
       "id": "BENCH-13",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 165,
+      "latency_ms": 120,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -188,7 +198,7 @@
     {
       "id": "BENCH-14",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 112,
+      "latency_ms": 103,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -197,7 +207,7 @@
     {
       "id": "BENCH-15",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 143,
+      "latency_ms": 116,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -206,7 +216,7 @@
     {
       "id": "BENCH-16",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 167,
+      "latency_ms": 114,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -215,7 +225,7 @@
     {
       "id": "BENCH-17",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 131,
+      "latency_ms": 95,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -224,7 +234,7 @@
     {
       "id": "BENCH-18",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 158,
+      "latency_ms": 115,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -233,7 +243,7 @@
     {
       "id": "BENCH-19",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 159,
+      "latency_ms": 143,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -242,7 +252,7 @@
     {
       "id": "BENCH-20",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 166,
+      "latency_ms": 126,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -251,7 +261,7 @@
     {
       "id": "BENCH-21",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 231,
+      "latency_ms": 163,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -260,7 +270,7 @@
     {
       "id": "BENCH-22",
       "category": "CONFIDENT_GROUNDED",
-      "latency_ms": 137,
+      "latency_ms": 116,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -269,7 +279,7 @@
     {
       "id": "BENCH-23",
       "category": "PERCEPTION_ESCALATION",
-      "latency_ms": 1320,
+      "latency_ms": 993,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -278,7 +288,7 @@
     {
       "id": "BENCH-24",
       "category": "PERCEPTION_ESCALATION",
-      "latency_ms": 191,
+      "latency_ms": 109,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -287,7 +297,7 @@
     {
       "id": "BENCH-25",
       "category": "PERCEPTION_ESCALATION",
-      "latency_ms": 154,
+      "latency_ms": 135,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -296,7 +306,7 @@
     {
       "id": "BENCH-26",
       "category": "PERCEPTION_ESCALATION",
-      "latency_ms": 151,
+      "latency_ms": 144,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -305,7 +315,7 @@
     {
       "id": "BENCH-27",
       "category": "PERCEPTION_ESCALATION",
-      "latency_ms": 197,
+      "latency_ms": 171,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -314,7 +324,7 @@
     {
       "id": "BENCH-28",
       "category": "PERCEPTION_ESCALATION",
-      "latency_ms": 193,
+      "latency_ms": 142,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -323,7 +333,7 @@
     {
       "id": "BENCH-29",
       "category": "PERCEPTION_ESCALATION",
-      "latency_ms": 168,
+      "latency_ms": 129,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -332,7 +342,7 @@
     {
       "id": "BENCH-30",
       "category": "PERCEPTION_ESCALATION",
-      "latency_ms": 169,
+      "latency_ms": 138,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -341,7 +351,7 @@
     {
       "id": "BENCH-31",
       "category": "BUFFER_AND_ACCESS",
-      "latency_ms": 390,
+      "latency_ms": 285,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -350,7 +360,7 @@
     {
       "id": "BENCH-32",
       "category": "BUFFER_AND_ACCESS",
-      "latency_ms": 235,
+      "latency_ms": 171,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -359,7 +369,7 @@
     {
       "id": "BENCH-33",
       "category": "BUFFER_AND_ACCESS",
-      "latency_ms": 100,
+      "latency_ms": 107,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -368,7 +378,7 @@
     {
       "id": "BENCH-34",
       "category": "BUFFER_AND_ACCESS",
-      "latency_ms": 314,
+      "latency_ms": 238,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -377,7 +387,7 @@
     {
       "id": "BENCH-35",
       "category": "BUFFER_AND_ACCESS",
-      "latency_ms": 285,
+      "latency_ms": 325,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -386,7 +396,7 @@
     {
       "id": "BENCH-36",
       "category": "BUFFER_AND_ACCESS",
-      "latency_ms": 227,
+      "latency_ms": 243,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -395,7 +405,7 @@
     {
       "id": "BENCH-37",
       "category": "DOCUMENT_EXTENT_DISCREPANCY",
-      "latency_ms": 1411,
+      "latency_ms": 956,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -404,7 +414,7 @@
     {
       "id": "BENCH-38",
       "category": "DOCUMENT_EXTENT_DISCREPANCY",
-      "latency_ms": 172,
+      "latency_ms": 85,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -413,7 +423,7 @@
     {
       "id": "BENCH-39",
       "category": "DOCUMENT_EXTENT_DISCREPANCY",
-      "latency_ms": 148,
+      "latency_ms": 98,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -422,7 +432,7 @@
     {
       "id": "BENCH-40",
       "category": "DOCUMENT_EXTENT_DISCREPANCY",
-      "latency_ms": 228,
+      "latency_ms": 160,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -431,7 +441,7 @@
     {
       "id": "BENCH-41",
       "category": "DOCUMENT_EXTENT_DISCREPANCY",
-      "latency_ms": 150,
+      "latency_ms": 155,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -440,7 +450,7 @@
     {
       "id": "BENCH-42",
       "category": "DOCUMENT_EXTENT_DISCREPANCY",
-      "latency_ms": 142,
+      "latency_ms": 120,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -449,7 +459,7 @@
     {
       "id": "BENCH-43",
       "category": "DOCUMENT_EXTENT_DISCREPANCY",
-      "latency_ms": 152,
+      "latency_ms": 117,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -458,7 +468,7 @@
     {
       "id": "BENCH-44",
       "category": "DOCUMENT_EXTENT_DISCREPANCY",
-      "latency_ms": 378,
+      "latency_ms": 292,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -467,7 +477,7 @@
     {
       "id": "BENCH-45",
       "category": "UNSUPPORTED_AND_ABSTAIN",
-      "latency_ms": 5,
+      "latency_ms": 8,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -485,7 +495,7 @@
     {
       "id": "BENCH-47",
       "category": "UNSUPPORTED_AND_ABSTAIN",
-      "latency_ms": 3961,
+      "latency_ms": 2722,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -503,7 +513,7 @@
     {
       "id": "BENCH-49",
       "category": "UNSUPPORTED_AND_ABSTAIN",
-      "latency_ms": 5,
+      "latency_ms": 4,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
@@ -512,11 +522,917 @@
     {
       "id": "BENCH-50",
       "category": "UNSUPPORTED_AND_ABSTAIN",
-      "latency_ms": 4,
+      "latency_ms": 6,
       "cost_usd": 0.0012,
       "accuracy": 1.0,
       "hallucinated_spatial": 0.0,
       "decision": "ABSTAIN"
     }
-  ]
+  ],
+  "detailed_competitor_results": {
+    "premium_only": [
+      {
+        "id": "BENCH-01",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 2520,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-02",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1518,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-03",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1571,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-04",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1591,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-05",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1548,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-06",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1667,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-07",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1409,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-08",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1661,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-09",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1382,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-10",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1485,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-11",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1662,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-12",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1469,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-13",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1552,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-14",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1354,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-15",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1356,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-16",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1606,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-17",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1551,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-18",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1298,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-19",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1456,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-20",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1339,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-21",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1658,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-22",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 1524,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-23",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 2527,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-24",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 1618,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-25",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 1352,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-26",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 1626,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-27",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 1655,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-28",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 1611,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-29",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 1347,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-30",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 1528,
+        "cost_usd": 0.0125,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-31",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 2300,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-32",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 1428,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-33",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 1337,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-34",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 1505,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-35",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 1588,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-36",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 1634,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-37",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 2235,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-38",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 1477,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-39",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 1321,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-40",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 1550,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-41",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 1358,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-42",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 1407,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-43",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 1553,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-44",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 1539,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-45",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 1596,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-46",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 1637,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-47",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 4444,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-48",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 1582,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-49",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 1395,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-50",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 1273,
+        "cost_usd": 0.0125,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      }
+    ],
+    "static_pipeline": [
+      {
+        "id": "BENCH-01",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 995,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-02",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-03",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-04",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-05",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-06",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-07",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-08",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 207,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-09",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-10",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-11",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-12",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-13",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-14",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-15",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-16",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-17",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-18",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-19",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-20",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-21",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-22",
+        "category": "CONFIDENT_GROUNDED",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 1.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-23",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 1061,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-24",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-25",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-26",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-27",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-28",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-29",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-30",
+        "category": "PERCEPTION_ESCALATION",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-31",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 1064,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-32",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-33",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-34",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-35",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-36",
+        "category": "BUFFER_AND_ACCESS",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-37",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 1100,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-38",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-39",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-40",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-41",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-42",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-43",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-44",
+        "category": "DOCUMENT_EXTENT_DISCREPANCY",
+        "latency_ms": 202,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 0.5,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-45",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-46",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-47",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 2686,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-48",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-49",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "BENCH-50",
+        "category": "UNSUPPORTED_AND_ABSTAIN",
+        "latency_ms": 35,
+        "cost_usd": 0.00085,
+        "accuracy": 0.0,
+        "hallucinated_spatial": 1.0,
+        "decision": "ACCEPT"
+      }
+    ]
+  }
 }
