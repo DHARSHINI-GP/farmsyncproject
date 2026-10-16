@@ -41,16 +41,18 @@ class EvidenceGraphBuilder:
         
         # Build DAG Nodes and Edges for provenance visualization
         doc_label = f"Doc: {doc_claims.get('document_source', 'None')}" if doc_found else f"Doc: ABSENT ({doc_claims.get('document_source', 'None')})"
-        reg_owner = registry_check.get('official_owner') or (doc_claims.get('extracted_owner') if doc_found else "UNVERIFIED")
+        reg_owner = registry_check.get('official_owner')
 
         photo_label = f"Photo: {vision_result.get('image_filename')}" if has_photo else f"Photo: NONE on record for Survey {survey_no or 'Unspecified'}"
         crop_label = f"Crop: {crop_name} ({crop_stage})" if crop_name else "Crop: UNVERIFIED (No Field Image)"
         adv_title = advisory_result.get("advisory_title") or "No Grounded Advisory"
 
+        db_label = f"Registry (RoR): {reg_owner}" if reg_owner else f"Registry (RoR): NO RECORD FOR SURVEY {survey_no or 'Unspecified'}"
+
         nodes = [
             {"id": "claim_root", "label": f"Survey {survey_no or 'Unspecified'} Claim", "type": "ROOT"},
             {"id": "doc_node", "label": doc_label, "type": "EVIDENCE_DOC" if doc_found else "EVIDENCE_MISSING"},
-            {"id": "db_node", "label": f"Registry: {reg_owner}", "type": "EVIDENCE_DB" if registry_check.get("registry_found") else "REGISTRY_ABSENT"},
+            {"id": "db_node", "label": db_label, "type": "EVIDENCE_DB" if reg_owner else "REGISTRY_ABSENT"},
             {"id": "gis_node", "label": f"GIS (Shapely): {parcel_gis.get('area_acres', 'N/A')} ac", "type": "DETERMINISTIC_GIS" if parcel_gis else "GIS_MISSING"},
             {"id": "photo_node", "label": photo_label, "type": "EVIDENCE_PHOTO" if has_photo else "PHOTO_MISSING"},
             {"id": "crop_node", "label": crop_label, "type": "PERCEPTION" if crop_name else "PERCEPTION_UNAVAILABLE"},
@@ -95,10 +97,11 @@ class EvidenceGraphBuilder:
             },
             {
                 "source_type": "DATABASE_REGISTRY",
-                "source_ref": "Thoothukudi_Land_Registry.parcels",
+                "source_ref": "TamilNilam_Revenue_Record_of_Rights.parcels",
                 "extracted_value": reg_owner,
-                "confidence": 1.00 if registry_check.get("registry_found") else 0.0,
-                "status": "FOUND_IN_REGISTRY" if registry_check.get("registry_found") else "REGISTRY_ABSENT"
+                "patta_number": registry_check.get("patta_number"),
+                "confidence": 1.00 if reg_owner else 0.0,
+                "status": "FOUND_IN_REGISTRY" if reg_owner else "REGISTRY_RECORD_ABSENT"
             },
             {
                 "source_type": "FIELD_PHOTOGRAPH",
@@ -128,6 +131,9 @@ class EvidenceGraphBuilder:
             "extracted_attributes": {
                 "registered_owner": reg_owner,
                 "document_owner": doc_claims.get("extracted_owner"),
+                "ownership_verified": registry_check.get("owner_match", False),
+                "ownership_status": registry_check.get("owner_verification_status", "UNVERIFIED"),
+                "patta_number": registry_check.get("patta_number"),
                 "gis_area_acres": parcel_gis.get("area_acres"),
                 "documented_area_acres": doc_claims.get("claimed_extent_acres"),
                 "extent_difference_pct": registry_check.get("extent_diff_pct"),

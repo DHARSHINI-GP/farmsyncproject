@@ -420,18 +420,21 @@ class FarmSyncOrchestrator:
             vision_result = context["vision_result"] or {}
 
             has_land_doc = bool(doc_claims.get("found", False))
-            has_reg = bool(reg_check.get("registry_found", False))
+            has_reg = bool(reg_check.get("registry_found", False) and reg_check.get("official_owner"))
             has_parcel = (parcel_gis is not None)
             has_photo = bool(vision_result.get("has_image", False))
 
-            doc_reg_match = bool(reg_check.get("owner_match", False) and has_land_doc)
+            doc_reg_match = bool(reg_check.get("owner_match", False) and has_land_doc and has_reg)
             spatial_match = (extent_check.get("verification_status") == "MATCH")
 
             candidate_payload = {
                 "survey_number": str(context["survey_no"]) if context["survey_no"] else "UNSPECIFIED",
                 "village": context["village"],
                 "extracted_attributes": {
-                    "registered_owner": reg_check.get("official_owner") or doc_claims.get("extracted_owner"),
+                    "registered_owner": reg_check.get("official_owner"),
+                    "document_owner": doc_claims.get("extracted_owner"),
+                    "ownership_verified": bool(reg_check.get("owner_match", False)),
+                    "ownership_status": reg_check.get("owner_verification_status", "UNVERIFIED"),
                     "gis_area_acres": parcel_gis.get("area_acres") if parcel_gis else None,
                     "predicted_crop": context.get("final_crop"),
                     "growth_stage": context.get("final_stage")
