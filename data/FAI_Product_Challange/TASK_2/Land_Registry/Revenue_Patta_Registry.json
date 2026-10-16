@@ -18,6 +18,34 @@
       "registration_date": "14-06-2022",
       "ror_status": "ACTIVE_VERIFIED"
     },
+    "384/1": {
+      "survey_no": "384/1",
+      "parent_survey_no": "384",
+      "sub_div": "1",
+      "village": "Keelathattaparai",
+      "taluk": "Thoothukudi",
+      "district": "Thoothukudi",
+      "patta_number": "1136/1",
+      "registered_owner": "Ramesh Kumar S/o Sundaram",
+      "land_classification": "Dry Agricultural (Punjai)",
+      "registered_extent_acres": 8.191,
+      "registration_date": "14-06-2022",
+      "ror_status": "ACTIVE_VERIFIED"
+    },
+    "384/2": {
+      "survey_no": "384/2",
+      "parent_survey_no": "384",
+      "sub_div": "2",
+      "village": "Keelathattaparai",
+      "taluk": "Thoothukudi",
+      "district": "Thoothukudi",
+      "patta_number": "1136/2",
+      "registered_owner": "S. Sundaram (Legal Partition)",
+      "land_classification": "Dry Agricultural (Punjai)",
+      "registered_extent_acres": 2.067,
+      "registration_date": "14-06-2022",
+      "ror_status": "ACTIVE_VERIFIED"
+    },
     "381": {
       "survey_no": "381",
       "village": "Keelathattaparai",

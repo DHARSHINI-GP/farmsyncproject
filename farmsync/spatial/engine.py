@@ -17,6 +17,7 @@ class SpatialEngine:
         
         self.data_root = data_root
         self.cadastral_path = os.path.join(data_root, "Park_Cadastral_Map.geojson")
+        self.fmb_path = os.path.join(data_root, "Park_fmb_Map.geojson")
         self.water_path = os.path.join(data_root, "Basic_GIS_Layers", "Waterbodies.geojson")
         self.roads_path = os.path.join(data_root, "Basic_GIS_Layers", "Road_network.geojson")
         self.substations_path = os.path.join(data_root, "Basic_GIS_Layers", "SubStations.geojson")
@@ -38,6 +39,18 @@ class SpatialEngine:
         self.gdf_parcels_utm["survey_no_clean"] = self.gdf_parcels_utm["survey_no"].astype(str).str.strip()
         self.gdf_parcels_wgs84["survey_no_clean"] = self.gdf_parcels_wgs84["survey_no"].astype(str).str.strip()
 
+        # Load and project Field Measurement Book (FMB) subdivision layer
+        if os.path.exists(self.fmb_path):
+            self.gdf_fmb_wgs84 = gpd.read_file(self.fmb_path)
+            self.gdf_fmb_utm = self.gdf_fmb_wgs84.to_crs(self.utm_crs)
+            self.gdf_fmb_wgs84["kide_clean"] = self.gdf_fmb_wgs84["KIDE"].astype(str).str.strip()
+            self.gdf_fmb_utm["kide_clean"] = self.gdf_fmb_utm["KIDE"].astype(str).str.strip()
+            self.gdf_fmb_wgs84["survey_no_clean"] = self.gdf_fmb_wgs84["survey_no"].astype(str).str.strip()
+            self.gdf_fmb_utm["survey_no_clean"] = self.gdf_fmb_utm["survey_no"].astype(str).str.strip()
+        else:
+            self.gdf_fmb_wgs84 = None
+            self.gdf_fmb_utm = None
+
         # Compute cadastral boundary convex hull in UTM for deterministic containment checks
         self.cadastral_hull_utm = self.gdf_parcels_utm.geometry.union_all().convex_hull
 
@@ -48,18 +61,65 @@ class SpatialEngine:
     def get_parcel(self, survey_no: str) -> Optional[Dict[str, Any]]:
         """
         Retrieves parcel attributes, exact GIS area in acres, and centroid coordinates.
+        Supports both base cadastral parcels (from Park_Cadastral_Map.geojson) and
+        authentic legal subdivisions (from Park_fmb_Map.geojson Field Measurement Book).
+        
+        STRICT SUBDIVISION POLICY:
+        - When a subdivision (e.g. '384/1') is requested, the system resolves its exact
+          subdivision boundary polygon and acreage from the FMB layer.
+        - If a requested subdivision is not present in the FMB layer, the system strictly
+          refuses to substitute the parent parcel geometry as if it were the subdivision,
+          which would produce erroneous area and boundary conclusions.
         """
         clean_no = str(survey_no).strip()
+        is_subdivision_query = any(sep in clean_no for sep in ["/", "-", "_"])
+
+        if is_subdivision_query:
+            import re
+            norm_kide = re.sub(r'[-_]', '/', clean_no).strip()
+            
+            # Lookup in FMB subdivision layer
+            if self.gdf_fmb_utm is not None and not self.gdf_fmb_utm.empty:
+                matches_fmb_utm = self.gdf_fmb_utm[self.gdf_fmb_utm["kide_clean"] == norm_kide]
+                matches_fmb_wgs = self.gdf_fmb_wgs84[self.gdf_fmb_wgs84["kide_clean"] == norm_kide]
+                
+                if not matches_fmb_utm.empty:
+                    p_utm = matches_fmb_utm.iloc[0]
+                    p_wgs = matches_fmb_wgs.iloc[0]
+                    
+                    area_sqm = float(p_utm.geometry.area)
+                    area_acres = float(area_sqm / 4046.8564224)
+                    centroid_wgs = p_wgs.geometry.centroid
+                    
+                    return {
+                        "survey_no": norm_kide,
+                        "parent_survey_no": str(p_wgs.get("survey_no", "")).strip(),
+                        "sub_div": str(p_wgs.get("sub_div", "")).strip(),
+                        "is_subdivision": True,
+                        "district": str(p_wgs.get("dist_name", "Thoothukudi")),
+                        "taluk": str(p_wgs.get("taluk_name", "Thoothukudi")),
+                        "village": str(p_wgs.get("vil_name", "Keelathattaparai")),
+                        "unit_id": str(p_wgs.get("unit_id", "")),
+                        "block_id": str(p_wgs.get("block_id", "")),
+                        "area_sq_meters": round(area_sqm, 2),
+                        "area_acres": round(area_acres, 3),
+                        "centroid": {
+                            "latitude": round(float(centroid_wgs.y), 6),
+                            "longitude": round(float(centroid_wgs.x), 6)
+                        },
+                        "geometry_geojson": mapping(p_wgs.geometry),
+                        "gis_source": "Park_fmb_Map.geojson (Field Measurement Book Subdivision)"
+                    }
+
+            # Under Refuse-to-Substitute policy:
+            # If the subdivision is NOT in FMB layer, strictly REFUSE to return the parent parcel
+            # geometry as if it were the subdivision.
+            return None
+
+        # Base Cadastral Parcel Lookup
         matches_utm = self.gdf_parcels_utm[self.gdf_parcels_utm["survey_no_clean"] == clean_no]
         matches_wgs = self.gdf_parcels_wgs84[self.gdf_parcels_wgs84["survey_no_clean"] == clean_no]
         
-        # If subdivision specified (e.g., 384/1 or 384-1), check parent survey number
-        if matches_utm.empty and any(sep in clean_no for sep in ["/", "-", "_"]):
-            import re
-            base_no = re.split(r'[/_\-]', clean_no)[0].strip()
-            matches_utm = self.gdf_parcels_utm[self.gdf_parcels_utm["survey_no_clean"] == base_no]
-            matches_wgs = self.gdf_parcels_wgs84[self.gdf_parcels_wgs84["survey_no_clean"] == base_no]
-
         if matches_utm.empty:
             return None
         
@@ -68,23 +128,34 @@ class SpatialEngine:
         
         area_sqm = float(p_utm.geometry.area)
         area_acres = float(area_sqm / 4046.8564224)
-        
         centroid_wgs = p_wgs.geometry.centroid
         
+        # Check if subdivisions exist for this base survey in FMB map
+        available_subdivs = []
+        if self.gdf_fmb_wgs84 is not None:
+            fmb_matches = self.gdf_fmb_wgs84[self.gdf_fmb_wgs84["survey_no_clean"] == clean_no]
+            if not fmb_matches.empty:
+                available_subdivs = sorted(list(fmb_matches["kide_clean"].unique()))
+
         return {
             "survey_no": clean_no,
-            "district": p_wgs.get("dist_name", "Thoothukudi"),
-            "taluk": p_wgs.get("taluk_name", "Thoothukudi"),
-            "village": p_wgs.get("vil_name", "Keelathattaparai"),
+            "parent_survey_no": clean_no,
+            "sub_div": None,
+            "is_subdivision": False,
+            "district": str(p_wgs.get("dist_name", "Thoothukudi")),
+            "taluk": str(p_wgs.get("taluk_name", "Thoothukudi")),
+            "village": str(p_wgs.get("vil_name", "Keelathattaparai")),
             "unit_id": str(p_wgs.get("unit_id", "")),
             "block_id": str(p_wgs.get("block_id", "")),
             "area_sq_meters": round(area_sqm, 2),
             "area_acres": round(area_acres, 3),
+            "subdivisions_available": available_subdivs,
             "centroid": {
                 "latitude": round(float(centroid_wgs.y), 6),
                 "longitude": round(float(centroid_wgs.x), 6)
             },
-            "geometry_geojson": mapping(p_wgs.geometry)
+            "geometry_geojson": mapping(p_wgs.geometry),
+            "gis_source": "Park_Cadastral_Map.geojson (Cadastral Parcel)"
         }
 
     def check_constraints(
@@ -100,13 +171,31 @@ class SpatialEngine:
         - Distance to nearest waterbody & 50m environmental buffer compliance (Proposal Section 4.2 & 7.2)
         - Distance to nearest road & access buffer
         - Distance to nearest electrical substation
+        Supports both base parcels and exact FMB subdivisions.
         """
         clean_no = str(survey_no).strip()
-        matches = self.gdf_parcels_utm[self.gdf_parcels_utm["survey_no_clean"] == clean_no]
-        if matches.empty:
+        import re
+        norm_kide = re.sub(r'[-_]', '/', clean_no).strip()
+        is_subdiv = any(sep in clean_no for sep in ["/", "-", "_"])
+
+        # 1. Resolve geometry from FMB if subdivision, else from cadastral layer
+        geom = None
+        source_layer = None
+        if is_subdiv and self.gdf_fmb_utm is not None:
+            matches_fmb = self.gdf_fmb_utm[self.gdf_fmb_utm["kide_clean"] == norm_kide]
+            if not matches_fmb.empty:
+                geom = matches_fmb.iloc[0].geometry
+                source_layer = "Park_fmb_Map (Field Measurement Book Subdivision)"
+        elif not is_subdiv and hasattr(self, 'gdf_parcels_utm'):
+            matches_cad = self.gdf_parcels_utm[self.gdf_parcels_utm["survey_no_clean"] == clean_no]
+            if not matches_cad.empty:
+                geom = matches_cad.iloc[0].geometry
+                source_layer = "Park_Cadastral_Map (Cadastral Parcel)"
+
+        if geom is None:
             return {
                 "survey_no": clean_no,
-                "error": f"Survey number {survey_no} not found in cadastral map",
+                "error": f"Survey/subdivision number '{survey_no}' not found in cadastral or FMB map",
                 "spatial_engine": "GeoPandas_Shapely_UTM44N",
                 "cadastral_containment_valid": False,
                 "geometry_valid": False,
@@ -116,7 +205,6 @@ class SpatialEngine:
                 "deterministic_spatial_verified": False
             }
 
-        geom = matches.iloc[0].geometry
         geom_valid = bool(geom.is_valid)
         containment_valid = bool(geom_valid and self.cadastral_hull_utm.contains(geom.centroid))
 
@@ -131,6 +219,7 @@ class SpatialEngine:
 
         return {
             "survey_no": clean_no,
+            "gis_source": source_layer,
             "spatial_engine": "GeoPandas_Shapely_UTM44N",
             "distance_to_waterbody_meters": round(min_dist_water, 2),
             "distance_to_road_meters": round(min_dist_road, 2),

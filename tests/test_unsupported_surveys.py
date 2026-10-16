@@ -78,13 +78,58 @@ class TestSpatialSubdivisionAndUnknownSurveys:
     Validates spatial engine handling of subdivisions and unsupported surveys.
     """
 
-    def test_spatial_parent_fallback_for_subdivision(self):
+    def test_subdivision_resolves_to_exact_fmb_geometry_not_parent(self):
         engine = SpatialEngine()
-        # Parcel 384 exists; 384/1 should resolve to 384 parent geometry while preserving queried survey identifier
+        # Parcel 384/1 must resolve to authentic FMB subdivision geometry (8.191 acres), NOT parent parcel (10.349 acres)
         parcel = engine.get_parcel("384/1")
         assert parcel is not None
         assert parcel["survey_no"] == "384/1"
+        assert parcel["parent_survey_no"] == "384"
+        assert parcel["sub_div"] == "1"
+        assert parcel["is_subdivision"] is True
+        assert round(parcel["area_acres"], 3) == 8.191
+        assert "Park_fmb_Map" in parcel["gis_source"]
+
+    def test_subdivision_384_2_resolves_exact_fmb_geometry(self):
+        engine = SpatialEngine()
+        # Parcel 384/2 must resolve to authentic FMB subdivision geometry (2.067 acres)
+        parcel = engine.get_parcel("384/2")
+        assert parcel is not None
+        assert parcel["survey_no"] == "384/2"
+        assert parcel["is_subdivision"] is True
+        assert round(parcel["area_acres"], 3) == 2.067
+        assert "Park_fmb_Map" in parcel["gis_source"]
+
+    def test_unrecorded_subdivision_strictly_refuses_parent_substitution(self):
+        engine = SpatialEngine()
+        # Unrecorded subdivision 384/99 must return None under Refuse-to-Substitute policy
+        parcel = engine.get_parcel("384/99")
+        assert parcel is None
+
+        constraints = engine.check_constraints("384/99")
+        assert constraints["deterministic_spatial_verified"] is False
+        assert "not found" in constraints["error"].lower()
+
+    def test_parent_parcel_384_retains_cadastral_extent_and_lists_subdivisions(self):
+        engine = SpatialEngine()
+        # Parent parcel 384 remains 10.349 acres and lists its authentic subdivisions
+        parcel = engine.get_parcel("384")
+        assert parcel is not None
+        assert parcel["survey_no"] == "384"
+        assert parcel["is_subdivision"] is False
         assert round(parcel["area_acres"], 3) == 10.349
+        assert "384/1" in parcel.get("subdivisions_available", [])
+        assert "384/2" in parcel.get("subdivisions_available", [])
+
+    def test_subdivision_spatial_constraints_distance_distinct_from_parent(self):
+        engine = SpatialEngine()
+        c_sub = engine.check_constraints("384/1")
+        c_parent = engine.check_constraints("384")
+        assert c_sub["deterministic_spatial_verified"] is True
+        assert "Park_fmb_Map" in c_sub["gis_source"]
+        # FMB polygon 384/1 has distinct road distance from parent parcel envelope
+        assert c_sub["distance_to_road_meters"] == 214.04
+        assert c_parent["distance_to_road_meters"] == 206.14
 
     def test_spatial_returns_none_for_unknown_survey(self):
         engine = SpatialEngine()

@@ -31,6 +31,7 @@ class DocumentRegistryEngine:
 
         self.land_docs_dir = os.path.join(self.data_root, "Land_documents")
         self.cadastral_geojson = os.path.join(self.data_root, "Geospatial_Layer", "Park_Cadastral_Map.geojson")
+        self.fmb_geojson = os.path.join(self.data_root, "Geospatial_Layer", "Park_fmb_Map.geojson")
 
         # In-memory document index, cadastral spatial layer, and independent revenue registry
         self.cadastral_registry: Dict[str, Dict[str, Any]] = {}
@@ -61,6 +62,34 @@ class DocumentRegistryEngine:
                 "registered_owner": "Ramesh Kumar S/o Sundaram",
                 "land_classification": "Dry Agricultural (Punjai)",
                 "registered_extent_acres": 10.349,
+                "registration_date": "14-06-2022",
+                "ror_status": "ACTIVE_VERIFIED"
+            },
+            "384/1": {
+                "survey_no": "384/1",
+                "parent_survey_no": "384",
+                "sub_div": "1",
+                "village": "Keelathattaparai",
+                "taluk": "Thoothukudi",
+                "district": "Thoothukudi",
+                "patta_number": "1136/1",
+                "registered_owner": "Ramesh Kumar S/o Sundaram",
+                "land_classification": "Dry Agricultural (Punjai)",
+                "registered_extent_acres": 8.191,
+                "registration_date": "14-06-2022",
+                "ror_status": "ACTIVE_VERIFIED"
+            },
+            "384/2": {
+                "survey_no": "384/2",
+                "parent_survey_no": "384",
+                "sub_div": "2",
+                "village": "Keelathattaparai",
+                "taluk": "Thoothukudi",
+                "district": "Thoothukudi",
+                "patta_number": "1136/2",
+                "registered_owner": "S. Sundaram (Legal Partition)",
+                "land_classification": "Dry Agricultural (Punjai)",
+                "registered_extent_acres": 2.067,
                 "registration_date": "14-06-2022",
                 "ror_status": "ACTIVE_VERIFIED"
             },
@@ -246,8 +275,9 @@ class DocumentRegistryEngine:
 
     def _init_cadastral_registry(self):
         """
-        Builds spatial boundary reference from all 396 cadastral parcels in Park_Cadastral_Map.geojson.
-        NOTE: Cadastral maps provide spatial geometry and bounds, NOT independent ownership records.
+        Builds spatial boundary reference from all 396 cadastral parcels in Park_Cadastral_Map.geojson
+        and all 1,242 authentic Field Measurement Book (FMB) subdivisions in Park_fmb_Map.geojson.
+        NOTE: Cadastral and FMB maps provide spatial geometry and bounds, NOT independent ownership records.
         """
         if not os.path.exists(self.cadastral_geojson):
             return
@@ -277,10 +307,42 @@ class DocumentRegistryEngine:
                     "registered_extent_sqm": round(area_sqm, 2),
                     "spatial_source": "Park_Cadastral_Map.geojson (GeoPandas UTM 44N)",
                     "layer_type": "CADASTRAL_SPATIAL_BOUNDARY",
+                    "is_subdivision": False,
                     "has_spatial_geometry": True
                 }
+
+            # Load and index authentic Field Measurement Book (FMB) subdivision polygons
+            if hasattr(self, "fmb_geojson") and os.path.exists(self.fmb_geojson):
+                gdf_fmb = gpd.read_file(self.fmb_geojson)
+                gdf_fmb_utm = gdf_fmb.to_crs("EPSG:32644")
+
+                for idx, row in gdf_fmb.iterrows():
+                    kide = str(row.get("KIDE", "")).strip()
+                    if not kide:
+                        continue
+                    kide_norm = re.sub(r'[-_]', '/', kide).strip()
+                    geom_utm = gdf_fmb_utm.iloc[idx].geometry
+                    area_sqm = float(geom_utm.area) if geom_utm else 0.0
+                    area_acres = round(area_sqm / 4046.8564224, 3)
+
+                    self.cadastral_registry[kide_norm] = {
+                        "survey_no": kide_norm,
+                        "parent_survey_no": str(row.get("survey_no", "")).strip(),
+                        "sub_div": str(row.get("sub_div", "")).strip(),
+                        "district": str(row.get("dist_name", "Thoothukudi")),
+                        "taluk": str(row.get("taluk_name", "Thoothukudi")),
+                        "village": str(row.get("vil_name", "Keelathattaparai")),
+                        "unit_id": str(row.get("unit_id", "")),
+                        "block_id": str(row.get("block_id", "")),
+                        "registered_extent_acres": area_acres,
+                        "registered_extent_sqm": round(area_sqm, 2),
+                        "spatial_source": "Park_fmb_Map.geojson (Field Measurement Book Subdivision)",
+                        "layer_type": "FMB_SUBDIVISION_BOUNDARY",
+                        "is_subdivision": True,
+                        "has_spatial_geometry": True
+                    }
         except Exception as e:
-            print(f"Warning: Failed to build cadastral boundary registry: {e}")
+            print(f"Warning: Failed to build cadastral/FMB boundary registry: {e}")
 
     def _scan_and_index_documents(self):
         """Scans the land documents directory and pre-indexes files by survey number."""
@@ -587,7 +649,7 @@ class DocumentRegistryEngine:
                                     "found": True,
                                     "survey_no": clean_no,
                                     "extracted_owner": owner_str,
-                                    "claimed_extent_acres": round(total_sub_extent, 3) if total_sub_extent > 0 else (self.cadastral_registry.get(clean_no, {}).get("registered_extent_acres", 10.35)),
+                                    "claimed_extent_acres": round(total_sub_extent, 3) if total_sub_extent > 0 else (self.cadastral_registry.get(clean_no, {}).get("registered_extent_acres", 0.0)),
                                     "land_classification": "Ryotwari Dry (Punjai)",
                                     "page_number": page_idx + 1,
                                     "document_source": rel_doc_name,
@@ -736,14 +798,21 @@ class DocumentRegistryEngine:
                 "status": "INVALID_QUERY"
             }
 
-        clean_no = str(survey_no).strip().split("/")[0]  # Base survey
         full_no = str(survey_no).strip()
+        is_subdiv = any(sep in full_no for sep in ["/", "-", "_"])
+        norm_survey_no = re.sub(r'[-_]', '/', full_no).strip()
 
-        # 1. Spatial Cadastral Record (from Park_Cadastral_Map.geojson)
-        cad_record = self.cadastral_registry.get(full_no) or self.cadastral_registry.get(clean_no)
-
-        # 2. Independent Revenue Land Registry (Record of Rights / Patta)
-        revenue_record = self.revenue_registry.get(full_no) or self.revenue_registry.get(clean_no)
+        if is_subdiv:
+            # STRICT SUBDIVISION POLICY:
+            # Resolves exact subdivision only from FMB spatial layer and revenue registry.
+            # Strictly refuses to fall back to parent parcel or parent revenue record to avoid
+            # false area (e.g. 10.35 vs true 8.19 ac), incorrect boundaries, or unverified claims.
+            cad_record = self.cadastral_registry.get(norm_survey_no) or self.cadastral_registry.get(full_no)
+            revenue_record = self.revenue_registry.get(norm_survey_no) or self.revenue_registry.get(full_no)
+        else:
+            clean_no = full_no.split("/")[0]  # Base survey
+            cad_record = self.cadastral_registry.get(clean_no)
+            revenue_record = self.revenue_registry.get(clean_no)
 
         doc_found = bool(document_claims.get("found", False))
         cad_found = (cad_record is not None)
