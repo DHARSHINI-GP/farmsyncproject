@@ -67,13 +67,37 @@ def test_proposal_benchmark_survey_384(trust_engine):
         output_payload=valid_payload
     )
 
-    assert res["fts_score"] == 0.942
+    assert res["fts_score"] == 0.97
     assert res["decision"] == "ACCEPT"
     assert res["breakdown"]["calibration"] == 0.92
     assert res["breakdown"]["evidence_coverage"] == 1.00
     assert res["breakdown"]["source_consistency"] == 0.95
     assert res["breakdown"]["deterministic_validation"] == 0.98
     assert res["breakdown"]["output_validity"] == 1.00
+    assert res["breakdown"]["conflict_penalty"] == 0.00
+
+
+def test_no_artificial_conflict_penalty_when_consistent(trust_engine):
+    """
+    CRITICAL AUDIT VERIFICATION:
+    Validates that when all independent evidence modalities (photo, document, registry)
+    are consistent, conflict penalty is strictly 0.00.
+    Eliminates the former artificial 0.1425 penalty hack that was injected
+    solely to force a benchmark score of 0.942.
+    """
+    res = trust_engine.evaluate_trust(
+        vision_confidence=0.99,
+        is_supported_crop=True,
+        doc_registry_match=True,
+        spatial_extent_match=True,
+        waterbody_conflict=False,
+        has_field_photo=True,
+        has_land_doc=True,
+        has_registry=True
+    )
+    assert res["breakdown"]["conflict_penalty"] == 0.00
+    assert res["fts_score"] == 0.97
+    assert res["decision"] == "ACCEPT"
 
 
 def test_vision_confidence_active_modulation(trust_engine):

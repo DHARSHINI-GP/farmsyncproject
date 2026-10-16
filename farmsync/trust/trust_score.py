@@ -151,6 +151,8 @@ class TrustEngine:
         validity_score = self.validate_output_schema(output_payload)
 
         # 6. Conflict / OOD Penalty Signal (P_conf)
+        # Strictly calculated from observed conflicts or out-of-distribution inputs.
+        # When all independent evidence is complete and consistent, penalty is strictly 0.00.
         conflict_penalty = 0.0
         if not doc_registry_match:
             conflict_penalty += 0.50
@@ -161,12 +163,7 @@ class TrustEngine:
         if not is_supported_crop:
             conflict_penalty += 0.25
 
-        # Residual spatial calibration penalty for minor Gazette vs PostGIS polygon delta
-        # Yields exact benchmark FTS = 0.942 when all primary evidence is consistent
-        if conflict_penalty == 0.0 and doc_registry_match and spatial_extent_match and has_field_photo and has_land_doc and has_registry:
-            conflict_penalty = 0.1425  # 0.20 * 0.1425 = 0.0285
-
-        conflict_penalty = min(1.0, conflict_penalty)
+        conflict_penalty = round(min(1.0, conflict_penalty), 3)
 
         # Compute Weighted FTS using proposal formula
         fts = (
