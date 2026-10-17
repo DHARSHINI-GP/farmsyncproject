@@ -79,12 +79,15 @@ def test_authentic_owner_matching_survey_384(extractor):
 
     assert result["registry_found"] is True
     assert result["owner_match"] is True
-    assert result["owner_verification_status"] == "OWNERSHIP_VERIFIED_MATCH"
+    assert result["owner_verification_status"] == "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
+    assert result["ownership_verified"] is False
+    assert result["demo_record_match"] is True
+    assert result["is_authoritative_government_record"] is False
     assert result["official_owner"] == "Ramesh Kumar S/o Sundaram"
     assert result["document_owner"] == "Ramesh Kumar"
     assert result["patta_number"] == "1136"
     assert result["extent_match"] is True
-    assert result["status"] == "CONSISTENT"
+    assert result["status"] == "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
 
 
 def test_unverified_legal_claim_rejection(extractor):
@@ -252,7 +255,7 @@ def test_evidence_graph_builder_records_demonstration_provenance():
         "official_owner": "Ramesh Kumar S/o Sundaram",
         "patta_number": "1136",
         "owner_match": True,
-        "owner_verification_status": "OWNERSHIP_VERIFIED_MATCH",
+        "owner_verification_status": "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION",
         "data_provenance": "DEMONSTRATION_BENCHMARK_DATA",
         "source_authority": "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)",
         "is_authoritative_government_record": False,
@@ -275,6 +278,9 @@ def test_evidence_graph_builder_records_demonstration_provenance():
     attrs = evidence_obj["extracted_attributes"]
     assert attrs["ownership_provenance"] == "DEMONSTRATION_BENCHMARK_DATA"
     assert attrs["is_authoritative_government_record"] is False
+    assert attrs["ownership_verified"] is False
+    assert attrs["ownership_status"] == "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
+    assert attrs["demo_record_matched"] is True
 
     nodes = {n["id"]: n for n in evidence_obj["evidence_graph_dag"]["nodes"]}
     assert "Demo Registry (RoR)" in nodes["db_node"]["label"]
@@ -282,6 +288,51 @@ def test_evidence_graph_builder_records_demonstration_provenance():
     db_evidence = next(ev for ev in evidence_obj["source_evidence"] if ev["source_type"] == "DATABASE_REGISTRY")
     assert db_evidence["data_provenance"] == "DEMONSTRATION_BENCHMARK_DATA"
     assert db_evidence["is_authoritative_government_record"] is False
+    assert db_evidence["status"] == "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
     assert "Demonstration Data" in db_evidence["source_ref"]
+
+
+def test_demonstration_match_is_not_official_verification(extractor, orchestrator):
+    """
+    CRITICAL AUDIT VERIFICATION:
+    Validates that:
+    1. A match against bundled demonstration records produces 'DEMO_MATCH_NOT_OFFICIAL_VERIFICATION'
+    2. ownership_verified is strictly False (no live government confirmation)
+    3. is_authoritative_government_record is strictly False
+    4. Orchestration does NOT count the demonstration match as authoritative registry evidence in FTS
+    5. Evidence coverage reflects photo and document (2/3 = 0.67) without fabricating authoritative DB coverage
+    """
+    doc_claims = {
+        "found": True,
+        "extracted_owner": "Ramesh Kumar",
+        "claimed_extent_acres": 10.349,
+        "document_source": "sample_patta_384.pdf"
+    }
+
+    # Direct extractor cross-check check
+    res_ext = extractor.cross_check_registry("384", doc_claims)
+    assert res_ext["owner_verification_status"] == "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
+    assert res_ext["status"] == "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
+    assert res_ext["ownership_verified"] is False
+    assert res_ext["is_authoritative_government_record"] is False
+    assert "Demo match—not official verification" in res_ext["details"]
+
+    # End-to-end orchestration check
+    res_orch = orchestrator.execute_request("Identify Survey 384 in Keelathattaparai village and verify parcel ownership.")
+    vobj = res_orch["verified_result_object"]
+    attrs = vobj["extracted_attributes"]
+
+    assert attrs["ownership_verified"] is False
+    assert attrs["ownership_status"] == "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
+    assert attrs["demo_record_matched"] is True
+    assert attrs["is_authoritative_government_record"] is False
+    assert attrs["ownership_verification_verdict"] == "demo match—not official verification"
+
+    # FTS trust metrics do not count demo registry as authoritative registry evidence (coverage = 2/3 = 0.67)
+    trust_metrics = vobj["trust_metrics"]
+    breakdown = trust_metrics["signal_breakdown"]
+    assert breakdown["evidence_coverage"] == 0.67
+    assert trust_metrics["verification_status"] == "VERIFIED_ACCEPT"
+
 
 

@@ -290,6 +290,30 @@ def test_environmental_buffer_audit_trust_signals(trust_engine):
     assert res_missing["fts_score"] < 0.70
 
 
+def test_demonstration_registry_not_counted_as_authoritative_evidence(trust_engine):
+    """
+    CRITICAL AUDIT VERIFICATION:
+    When registry evidence is absent or non-authoritative (has_registry=False),
+    evidence coverage is honestly computed as 2/3 (0.67), FTS is 0.875 (VERIFIED_ACCEPT),
+    and the system does NOT hallucinate or count demo fixtures as official title verification.
+    """
+    res = trust_engine.evaluate_trust(
+        vision_confidence=0.95,
+        is_supported_crop=True,
+        doc_registry_match=True,
+        spatial_extent_match=True,
+        waterbody_conflict=False,
+        has_field_photo=True,
+        has_land_doc=True,
+        has_registry=False
+    )
+    assert res["fts_score"] == 0.875
+    assert res["decision"] == "ACCEPT"
+    assert res["breakdown"]["evidence_coverage"] == 0.67
+    assert res["breakdown"]["source_consistency"] == 0.90
+    assert res["breakdown"]["conflict_penalty"] == 0.00
+
+
 def main():
     print("Testing TrustEngine...")
     eng = TrustEngine()
@@ -300,6 +324,7 @@ def main():
     test_injected_conflict_abstention(eng)
     test_out_of_distribution_escalation(eng)
     test_environmental_buffer_audit_trust_signals(eng)
+    test_demonstration_registry_not_counted_as_authoritative_evidence(eng)
     print("ALL TRUST TESTS PASSED PERFECTLY!")
 
 

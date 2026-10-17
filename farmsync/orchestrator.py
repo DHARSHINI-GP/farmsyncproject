@@ -499,6 +499,7 @@ class FarmSyncOrchestrator:
 
             has_land_doc = bool(doc_claims.get("found", False))
             has_reg = bool(reg_check.get("registry_found", False) and reg_check.get("official_owner"))
+            is_authoritative_reg = bool(has_reg and reg_check.get("is_authoritative_government_record", False))
             has_parcel = (parcel_gis is not None)
             has_photo = bool(vision_result.get("has_image", False))
 
@@ -514,8 +515,10 @@ class FarmSyncOrchestrator:
                     "extracted_attributes": {
                         "registered_owner": reg_check.get("official_owner"),
                         "document_owner": doc_claims.get("extracted_owner"),
-                        "ownership_verified": bool(reg_check.get("owner_match", False) and has_land_doc and has_reg),
+                        "ownership_verified": bool(reg_check.get("owner_match", False) and has_land_doc and is_authoritative_reg),
                         "ownership_status": reg_check.get("owner_verification_status", "NOT_EVALUATED_GEOMETRY_AUDIT"),
+                        "demo_record_match": bool(reg_check.get("owner_match", False) and has_land_doc and has_reg),
+                        "is_authoritative_government_record": bool(reg_check.get("is_authoritative_government_record", False)),
                         "parcel_geometry_verified": geom_valid,
                         "gis_area_acres": parcel_gis.get("area_acres") if parcel_gis else None,
                         "predicted_crop": context.get("final_crop"),
@@ -555,14 +558,17 @@ class FarmSyncOrchestrator:
                 doc_reg_match = True
                 spatial_match = bool(has_parcel and spatial_constraints.get("geometry_valid", False))
 
+            has_demo_match = bool(reg_check.get("owner_match", False) and has_land_doc and has_reg)
             candidate_payload = {
                 "survey_number": str(context["survey_no"]) if context["survey_no"] else "UNSPECIFIED",
                 "village": context["village"],
                 "extracted_attributes": {
                     "registered_owner": reg_check.get("official_owner"),
                     "document_owner": doc_claims.get("extracted_owner"),
-                    "ownership_verified": bool(reg_check.get("owner_match", False) and has_land_doc and has_reg),
+                    "ownership_verified": bool(has_demo_match and is_authoritative_reg),
                     "ownership_status": reg_check.get("owner_verification_status", "UNVERIFIED"),
+                    "demo_record_match": has_demo_match,
+                    "is_authoritative_government_record": bool(reg_check.get("is_authoritative_government_record", False)),
                     "parcel_geometry_verified": spatial_match,
                     "gis_area_acres": parcel_gis.get("area_acres") if parcel_gis else None,
                     "predicted_crop": context.get("final_crop"),
@@ -582,7 +588,7 @@ class FarmSyncOrchestrator:
                 waterbody_conflict=spatial_constraints.get("waterbody_buffer_conflict", False) if parcel_gis else False,
                 has_field_photo=has_photo,
                 has_land_doc=has_land_doc,
-                has_registry=has_reg and has_parcel,
+                has_registry=bool(is_authoritative_reg and has_parcel),
                 output_payload=candidate_payload,
                 workflow_type=wf_type
             )

@@ -104,7 +104,7 @@ class EvidenceGraphBuilder:
                 "data_provenance": registry_check.get("data_provenance", "DEMONSTRATION_BENCHMARK_DATA"),
                 "is_authoritative_government_record": False,
                 "confidence": 1.00 if reg_owner else 0.0,
-                "status": "FOUND_IN_DEMO_REGISTRY" if reg_owner else "REGISTRY_RECORD_ABSENT",
+                "status": "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION" if reg_owner else "REGISTRY_RECORD_ABSENT",
                 "disclaimer": registry_check.get("registry_disclaimer", "Demonstration benchmark dataset; not an authoritative live government confirmation.")
             },
             {
@@ -142,11 +142,13 @@ class EvidenceGraphBuilder:
             "extracted_attributes": {
                 "registered_owner": reg_owner,
                 "document_owner": doc_claims.get("extracted_owner"),
-                "ownership_verified": bool(registry_check.get("owner_match", False) and doc_found and (reg_owner is not None)),
+                "ownership_verified": bool(registry_check.get("owner_match", False) and doc_found and (reg_owner is not None) and registry_check.get("is_authoritative_government_record", False)),
                 "ownership_status": registry_check.get("owner_verification_status", "NOT_EVALUATED" if not doc_found else "UNVERIFIED"),
+                "demo_record_matched": bool(registry_check.get("owner_match", False) and doc_found and (reg_owner is not None)),
+                "ownership_verification_verdict": "demo match—not official verification" if (registry_check.get("owner_match", False) and not registry_check.get("is_authoritative_government_record", False)) else ("OFFICIAL_VERIFIED" if registry_check.get("is_authoritative_government_record", False) else "UNVERIFIED"),
                 "parcel_geometry_verified": spatial_constraints.get("geometry_valid", False) if parcel_gis else False,
                 "ownership_provenance": registry_check.get("data_provenance", "DEMONSTRATION_BENCHMARK_DATA"),
-                "is_authoritative_government_record": False,
+                "is_authoritative_government_record": bool(registry_check.get("is_authoritative_government_record", False)),
                 "patta_number": registry_check.get("patta_number"),
                 "gis_area_acres": parcel_gis.get("area_acres") if parcel_gis else None,
                 "documented_area_acres": doc_claims.get("claimed_extent_acres"),

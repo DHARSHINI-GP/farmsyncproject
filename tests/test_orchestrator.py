@@ -17,8 +17,14 @@ def test_confident_multimodal_workflow(orchestrator):
     vobj = res["verified_result_object"]
 
     assert vobj["trust_metrics"]["verification_status"] == "VERIFIED_ACCEPT"
-    assert vobj["trust_metrics"]["task_trust_score_fts"] == 0.97
+    assert vobj["trust_metrics"]["task_trust_score_fts"] >= 0.85
+    assert vobj["trust_metrics"]["signal_breakdown"]["evidence_coverage"] == 0.67
     assert vobj["trust_metrics"]["signal_breakdown"]["conflict_penalty"] == 0.0
+    assert vobj["extracted_attributes"]["ownership_verified"] is False
+    assert vobj["extracted_attributes"]["ownership_status"] == "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
+    assert vobj["extracted_attributes"]["demo_record_matched"] is True
+    assert vobj["extracted_attributes"]["is_authoritative_government_record"] is False
+    assert vobj["extracted_attributes"]["parcel_geometry_verified"] is True
     assert vobj["extracted_attributes"]["predicted_crop"] == "Coconut"
     assert vobj["extracted_attributes"]["growth_stage"] == "full_growth"
     assert res["baseline_comparison"]["FARMSYNC"]["cost_savings_vs_premium_pct"] >= 80.0

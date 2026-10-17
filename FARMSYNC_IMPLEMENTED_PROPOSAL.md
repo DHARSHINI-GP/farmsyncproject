@@ -130,8 +130,9 @@ FTS &= w_1 \cdot C_{\text{cal}} + w_2 \cdot E_{\text{cov}} + w_3 \cdot S_{\text{
 &= \mathbf{0.9705} \quad (\approx \mathbf{0.971} \text{ in 3-decimal engine output, } \mathbf{0.97} \text{ in 2-decimal breakdowns})
 \end{aligned}$$
 
-> **Audit Note on Formula Calibration**:
-> Applying the calibrated weights ($0.15, 0.25, 0.25, 0.25, 0.10$) to the empirical signals for Survey 384 with zero conflict penalty produces strictly **0.9705** ($\ge 0.85 \implies \text{ACCEPT}$). An earlier preliminary draft included an illustrative $0.942$ placeholder (derived from a hypothetical $0.1425$ conflict penalty); the audited production codebase (`farmsync/trust/trust_score.py`) computes $P_{\text{conf}} = 0.00$ when all 3 independent evidence modalities agree, yielding the exact reproducible score of **0.9705**.
+> **Audit Note on Formula Calibration & Registry Evidence Provenance**:
+> - **Full Multimodal Target with Authoritative Government Registry ($FTS = 0.971$)**: Applying the calibrated weights ($0.15, 0.25, 0.25, 0.25, 0.10$) to all 3 independent modalities (OCR deed, live authoritative Government Land Registry DB, and GeoPandas GIS) with zero conflict penalty produces strictly **0.9705** ($\ge 0.85 \implies \text{ACCEPT}$).
+> - **Standalone Demonstration Benchmark Fixture ($FTS = 0.875$)**: In the offline demonstration environment, bundled owner records are demonstration fixtures (`DEMONSTRATION_BENCHMARK_DATA`) and are strictly labeled `"demo match—not official verification"`. To prevent mistaking demo matches for official title confirmation, the system does not count local demo records as authoritative government registry evidence, setting `ownership_verified = False` and evaluating evidence coverage across verified field modalities (field photograph, OCR document, cadastral GIS boundary: $E_{\text{cov}} = 2/3 = 0.67, S_{\text{cons}} = 0.90 \implies FTS = 0.875 \ge 0.85$, accepted).
 
 ---
 

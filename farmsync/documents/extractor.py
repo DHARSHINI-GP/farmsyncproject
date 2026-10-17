@@ -855,13 +855,26 @@ class DocumentRegistryEngine:
         reg_owner = revenue_record.get("registered_owner")
         doc_owner = document_claims.get("extracted_owner", "")
         owner_match = self._verify_owner_match(doc_owner, reg_owner)
+        is_authoritative = bool(revenue_record.get("is_authoritative_government_record", False))
 
         if owner_match:
-            owner_status = "OWNERSHIP_VERIFIED_MATCH"
+            owner_status = "OWNERSHIP_VERIFIED_MATCH" if is_authoritative else "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
         else:
             owner_status = "OWNERSHIP_DISCREPANCY_DETECTED"
 
-        overall_status = "CONSISTENT" if (owner_match and extent_match) else "DISCREPANCY_DETECTED"
+        if owner_match and extent_match:
+            overall_status = "CONSISTENT_OFFICIAL_MATCH" if is_authoritative else "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
+        else:
+            overall_status = "DISCREPANCY_DETECTED"
+
+        details_msg = (
+            f"Demo match—not official verification: Document claimant '{doc_owner}' matches demonstration benchmark Record of Rights owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')}). Record provenance: Demonstration Benchmark Data. This fixture does not constitute authoritative legal government title confirmation from the TamilNilam portal."
+            if (owner_match and not is_authoritative) else (
+                f"Ownership verified against official Record of Rights: Document claimant '{doc_owner}' matches registered owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')})."
+                if owner_match else
+                f"Ownership discrepancy detected: Document claimant '{doc_owner}' does NOT match demonstration Record of Rights owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')})."
+            )
+        )
 
         return {
             "survey_no": survey_no,
@@ -872,10 +885,12 @@ class DocumentRegistryEngine:
             "document_owner": doc_owner,
             "patta_number": revenue_record.get("patta_number"),
             "owner_match": owner_match,
+            "ownership_verified": bool(owner_match and is_authoritative),  # Strictly False for demo records!
             "owner_verification_status": owner_status,
+            "demo_record_match": owner_match,
             "data_provenance": revenue_record.get("data_provenance", "DEMONSTRATION_BENCHMARK_DATA"),
             "source_authority": revenue_record.get("source_authority", "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)"),
-            "is_authoritative_government_record": False,
+            "is_authoritative_government_record": is_authoritative,
             "last_verified_date": revenue_record.get("last_verified_date", "2024-03-15"),
             "registry_disclaimer": "Matches demonstration benchmark Record of Rights; does not constitute legal government title confirmation from TamilNilam portal.",
             "official_extent_acres": official_extent,
@@ -888,11 +903,7 @@ class DocumentRegistryEngine:
             "village": revenue_record.get("village") or (cad_record.get("village") if cad_found else "Keelathattaparai"),
             "taluk": revenue_record.get("taluk") or (cad_record.get("taluk") if cad_found else "Thoothukudi"),
             "status": overall_status,
-            "details": (
-                f"Ownership consistent with demonstration Record of Rights: Document claimant '{doc_owner}' matches registered owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')}). [Notice: Verified against bundled demonstration benchmark data; not an official live government confirmation]."
-                if owner_match else
-                f"Ownership discrepancy detected: Document claimant '{doc_owner}' does NOT match demonstration Record of Rights owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')})."
-            )
+            "details": details_msg
         }
 
 DocumentRegistryExtractor = DocumentRegistryEngine
