@@ -52,43 +52,10 @@ class FarmSyncOrchestrator:
             "data", "benchmark_results.json"
         )
 
-    def _load_benchmark_summary(self) -> Dict[str, Any]:
-        """Loads benchmark results from data/benchmark_results.json (FARMSYNC measured live, competitor baselines simulated)."""
-        if os.path.exists(self.benchmark_results_path):
-            try:
-                import json
-                with open(self.benchmark_results_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if "summary" in data:
-                        return data["summary"]
-            except Exception:
-                pass
-        return {
-            "FARMSYNC": {
-                "name": "FARMSYNC (Adaptive Orchestration - Measured Live)",
-                "verified_accuracy_pct": 100.0,
-                "average_cost_usd": 0.00120,
-                "average_latency_ms": 311,
-                "spatial_hallucination_rate_pct": 0.0,
-                "cost_savings_vs_premium_pct": 90.4
-            },
-            "Premium_Only": {
-                "name": "Simulated Premium-Only (Frontier VLM Baseline)",
-                "verified_accuracy_pct": 46.0,
-                "average_cost_usd": 0.01250,
-                "average_latency_ms": 1632,
-                "spatial_hallucination_rate_pct": 44.0,
-                "cost_savings_vs_premium_pct": 0.0
-            },
-            "Static_Routing": {
-                "name": "Simulated Static Pipeline (Fixed Routing Baseline)",
-                "verified_accuracy_pct": 44.0,
-                "average_cost_usd": 0.00085,
-                "average_latency_ms": 176,
-                "spatial_hallucination_rate_pct": 32.0,
-                "cost_savings_vs_premium_pct": 93.2
-            }
-        }
+    def _load_benchmark_summary(self):
+        """Historical results do not validate the current implementation."""
+        return {'status': 'NOT_CURRENTLY_VALIDATED', 'verified_accuracy_pct': None,
+                'actual_cost_savings_pct': None, 'reason': 'Requires a new independently reviewed evaluation'}
 
     def execute_request(
         self,
@@ -99,7 +66,9 @@ class FarmSyncOrchestrator:
         simulate_conflict: bool = False,
         simulate_unsupported_crop: bool = False,
         parcel_id: Optional[str] = None,
-        image_filename: Optional[str] = None
+        image_filename: Optional[str] = None,
+        event_callback=None,
+        cancel_check=None
     ) -> Dict[str, Any]:
         """
         Executes an end-to-end multimodal geospatial request by walking the compiled TaskGraph DAG
@@ -108,7 +77,9 @@ class FarmSyncOrchestrator:
         start_time = time.time()
 
         # Step 1: Compile query into executable TaskGraph DAG
-        task_graph: TaskGraph = self.compiler.compile(query)
+        from farmsync.router.planner import DomainPlanner
+        plan = DomainPlanner().plan(query, has_document=bool(document_path), has_image=bool(image_filename))
+        task_graph: TaskGraph = self.compiler.compile(query, plan=plan)
         target_survey = survey_no or task_graph.target_survey_no
         village = task_graph.target_village or "Keelathattaparai"
         selected = self.spatial.get_parcel(parcel_id) if parcel_id else None
@@ -128,6 +99,7 @@ class FarmSyncOrchestrator:
             "village": village,
             "document_path": target_doc,
             "workflow_type": task_graph.workflow_type,
+            "water_buffer_meters": self.compiler.extract_buffer_distance(query),
             "force_escalate_vision": force_escalate_vision,
             "simulate_conflict": simulate_conflict,
             "simulate_unsupported_crop": simulate_unsupported_crop,
@@ -153,6 +125,8 @@ class FarmSyncOrchestrator:
         total_cost = 0.0
 
         for task in execution_order:
+            if cancel_check:
+                cancel_check()
             # Enforce dependency resolution
             if not task_graph.are_deps_satisfied(task.id, completed_tasks):
                 unmet = [d for d in task.deps if d not in completed_tasks]
@@ -160,6 +134,8 @@ class FarmSyncOrchestrator:
                 continue
 
             task.mark_running()
+            if event_callback:
+                event_callback({"task_id": task.id, "name": task.name, "status": "RUNNING"})
             node_start = time.time()
 
             # Step 3a: Mathematical Verified-Utility Route Selection
@@ -188,6 +164,8 @@ class FarmSyncOrchestrator:
                 route_decision=route_decision
             )
             completed_tasks.add(task.id)
+            if event_callback:
+                event_callback({"task_id": task.id, "name": task.name, "status": "COMPLETED", "latency_ms": node_elapsed_ms, "actual_execution_model": step_meta.get("actual_execution_model")})
 
             # Step 3c: Append to execution telemetry
             step_record = {
@@ -217,6 +195,9 @@ class FarmSyncOrchestrator:
             for step in telemetry_steps
         )
         telemetry_summary = {
+            "planner_source": getattr(task_graph, "planner_source", "VALIDATED_DOMAIN_TEMPLATE"),
+            "planning_usage": getattr(task_graph, "planning_usage", {}),
+            "plan_fallback": bool(plan and plan.get("fallback")),
             "total_latency_ms": total_latency_ms,
             "total_estimated_cost_usd": round(total_cost, 5),
             "step_count": len(telemetry_steps),
@@ -251,60 +232,28 @@ class FarmSyncOrchestrator:
         )
         # Document-vs-GIS extent is distinct from document-vs-demo-registry extent.
         extent_check = context["extent_check"] or {}
-        extent_pct = extent_check.get("discrepancy_percentage") if doc_claims.get("found") else None
+        extent_pct = extent_check.get("discrepancy_percentage") if doc_claims.get("found") and extent_check.get('verification_status') in {'MATCH','MISMATCH','DISCREPANCY_FLAGGED'} else None
         verified_result["extracted_attributes"]["extent_difference_pct"] = extent_pct
         verified_result["deterministic_spatial_checks"]["extent_mismatch_pct"] = extent_pct
         verified_result["deterministic_spatial_checks"]["extent_verification"] = extent_check
         verified_result["parcel_id"] = (parcel_gis or {}).get("parcel_id")
+        verified_result["trust_metrics"]["score_kind"] = "HEURISTIC_EVIDENCE_SCORE_NOT_A_PROBABILITY"
+        verified_result["trust_metrics"]["policy_version"] = "source-only-2.1"
 
-        # Step 6: Head-to-head Baseline Benchmarking Matrix
-        bench_summary = self._load_benchmark_summary()
-        fs_bench = bench_summary.get("FARMSYNC", {})
-        prem_bench = bench_summary.get("Premium_Only", {})
-        stat_bench = bench_summary.get("Static_Routing", {})
-
+        # Historical simulations do not establish present accuracy or actual savings.
         baseline_comparison = {
-            "benchmark_suite": "FARMSYNC 50-Query Multimodal Cadastral Benchmark (Measured vs Simulated)",
-            "total_benchmark_queries": 50,
-            "methodology_note": "FARMSYNC is measured live query-by-query; competitor baselines are simulated architectural models based on token cost assumptions and prompt-only spatial estimation without external API calls.",
+            "benchmark_suite": "Historical 50-query suite is invalid for the corrected source-evidence policy",
+            "total_benchmark_queries": 0,
             "current_configuration_validated": False,
-            "benchmark_notice": "Stored scenario results predate corrected parcel/photo association; re-evaluation is required. Route costs are assumptions, not measured AWS billing.",
+            "benchmark_notice": "Current workflow latency is measured. Routing costs are estimates. Accuracy, hallucination rates and savings require a new validated comparison.",
             "FARMSYNC": {
-                "evaluation_type": "measured_live_execution",
-                "architecture": "Verified-Utility Router + Deterministic GeoPandas/Shapely GIS + FTS Trust Engine",
-                "cost_usd": round(total_cost, 5),
-                "latency_ms": total_latency_ms,
-                "verified_accuracy_pct": fs_bench.get("verified_accuracy_pct", 100.0),
-                "hallucination_rate_pct": 0.0,
-                "cost_savings_vs_premium_pct": round((1.0 - (total_cost / 0.0125)) * 100, 1),
-                "benchmark_measured_accuracy_pct": fs_bench.get("verified_accuracy_pct", 100.0),
-                "benchmark_avg_cost_usd": fs_bench.get("average_cost_usd", 0.00120),
-                "benchmark_avg_latency_ms": fs_bench.get("average_latency_ms", 311)
+                "evaluation_type": "current_workflow_telemetry",
+                "cost_usd": round(total_cost, 5), "latency_ms": total_latency_ms,
+                "verified_accuracy_pct": None, "hallucination_rate_pct": None,
+                "cost_savings_vs_premium_pct": None, "benchmark_measured_accuracy_pct": None,
             },
-            "Premium_Only": {
-                "evaluation_type": "simulated_architectural_baseline",
-                "architecture": "Simulated Commercial Frontier VLM (Prompt-Only Architecture Baseline)",
-                "cost_usd": 0.01250,
-                "latency_ms": 1850,
-                "verified_accuracy_pct": prem_bench.get("verified_accuracy_pct", 46.0),
-                "hallucination_rate_pct": prem_bench.get("spatial_hallucination_rate_pct", 44.0),
-                "cost_savings_vs_premium_pct": 0.0,
-                "benchmark_measured_accuracy_pct": prem_bench.get("verified_accuracy_pct", 46.0),
-                "benchmark_avg_cost_usd": prem_bench.get("average_cost_usd", 0.01250),
-                "benchmark_avg_latency_ms": prem_bench.get("average_latency_ms", 1632)
-            },
-            "Static_Routing": {
-                "evaluation_type": "simulated_architectural_baseline",
-                "architecture": "Simulated Static Pipeline (Fixed Routing Architecture Baseline)",
-                "cost_usd": 0.00085,
-                "latency_ms": 176,
-                "verified_accuracy_pct": stat_bench.get("verified_accuracy_pct", 44.0),
-                "hallucination_rate_pct": stat_bench.get("spatial_hallucination_rate_pct", 32.0),
-                "cost_savings_vs_premium_pct": round((1.0 - (0.00085 / 0.0125)) * 100, 1),
-                "benchmark_measured_accuracy_pct": stat_bench.get("verified_accuracy_pct", 44.0),
-                "benchmark_avg_cost_usd": stat_bench.get("average_cost_usd", 0.00085),
-                "benchmark_avg_latency_ms": stat_bench.get("average_latency_ms", 176)
-            }
+            "Premium_Only": {"evaluation_type": "NOT_EXECUTED", "benchmark_measured_accuracy_pct": None},
+            "Static_Routing": {"evaluation_type": "NOT_EXECUTED", "benchmark_measured_accuracy_pct": None},
         }
 
         return {
@@ -335,6 +284,11 @@ class FarmSyncOrchestrator:
                 survey_no=context["survey_no"],
                 simulate_mismatch=context["simulate_conflict"]
             )
+            source_village = doc_claims.get('document_village')
+            if source_village and context.get('village') and source_village.strip().casefold() != context['village'].strip().casefold():
+                doc_claims = {**doc_claims, 'found':False, 'extracted_owner':None, 'claimed_extent_acres':None,
+                              'status':'DOCUMENT_VILLAGE_CONFLICT', 'observations':[doc_claims],
+                              'error':'The document village conflicts with the selected parcel; source claims were not applied to that parcel.'}
             context["doc_claims"] = doc_claims
             return {
                 "document_source": doc_claims.get("document_source"),
@@ -356,6 +310,8 @@ class FarmSyncOrchestrator:
             }
 
         elif stype == "GEOSPATIAL_GIS":
+            if context.get("spatial_constraints") is not None:
+                return {"actual_execution_model": "Cached GeoPandas/Shapely result for this run", "cadastral_found": context.get("parcel_gis") is not None}
             target_survey = context["parcel_key"]
             doc_claims = context["doc_claims"] or {}
             parcel_gis = self.spatial.get_parcel(target_survey) if target_survey else None
@@ -363,7 +319,7 @@ class FarmSyncOrchestrator:
 
             if parcel_gis:
                 context["village"] = parcel_gis["village"]
-                spatial_constraints = self.spatial.check_constraints(target_survey)
+                spatial_constraints = self.spatial.check_constraints(target_survey, water_buffer_meters=context["water_buffer_meters"])
                 claimed_ac = doc_claims.get("claimed_extent_acres")
                 if claimed_ac is not None and claimed_ac > 0:
                     extent_check = self.spatial.verify_extent(target_survey, claimed_ac)
@@ -372,9 +328,9 @@ class FarmSyncOrchestrator:
                         "survey_no": target_survey,
                         "claimed_acres": None,
                         "gis_acres": parcel_gis["area_acres"],
-                        "difference_acres": 0.0,
-                        "discrepancy_percentage": 0.0,
-                        "discrepancy_exceeded": False,
+                        "difference_acres": None,
+                        "discrepancy_percentage": None,
+                        "discrepancy_exceeded": None,
                         "verification_status": "DOCUMENT_EXTENT_NOT_AVAILABLE"
                     }
                 try:
@@ -404,9 +360,9 @@ class FarmSyncOrchestrator:
                     "survey_no": target_survey or "UNSPECIFIED",
                     "claimed_acres": doc_claims.get("claimed_extent_acres"),
                     "gis_acres": None,
-                    "difference_acres": 0.0,
-                    "discrepancy_percentage": 100.0,
-                    "discrepancy_exceeded": True,
+                    "difference_acres": None,
+                    "discrepancy_percentage": None,
+                    "discrepancy_exceeded": None,
                     "verification_status": "CADASTRAL_PARCEL_NOT_FOUND"
                 }
                 context["agri_logistics"] = {
@@ -429,7 +385,21 @@ class FarmSyncOrchestrator:
             parcel = self.spatial.get_parcel(context["parcel_key"])
             matched_photo = self.vision.get_image_for_survey(target_survey, parcel=parcel) if target_survey and parcel else None
             img_record = self.vision.image_registry.get(context["image_filename"]) if context.get("image_filename") else matched_photo
-            photo_aligned = bool(img_record and matched_photo and img_record["filename"] == matched_photo["filename"])
+            photo_aligned = False
+            if img_record and parcel:
+                from shapely.geometry import shape, Point
+                try:
+                    lat, lon = float(img_record.get("latitude")), float(img_record.get("longitude"))
+                    photo_aligned = shape(parcel["geometry_geojson"]).covers(Point(lon, lat))
+                except (ValueError, TypeError):
+                    pass
+            if img_record and img_record.get("location_source"):
+                # User-entered coordinates are a claim, not independently verified
+                # field-photo provenance. They cannot raise parcel evidence trust.
+                vision_coordinate_containment = photo_aligned
+                photo_aligned = False
+            else:
+                vision_coordinate_containment = photo_aligned
             context["img_record"] = img_record
             img_path = img_record["filepath"] if img_record else None
 
@@ -441,6 +411,8 @@ class FarmSyncOrchestrator:
                 force_escalate=is_forced
             )
             vision_result["photo_association_verified"] = photo_aligned
+            vision_result["coordinate_containment"] = vision_coordinate_containment
+            vision_result["location_source"] = (img_record or {}).get("location_source", "provided dataset metadata")
             context["vision_result"] = vision_result
             context["vision_confidence"] = vision_result.get("confidence", 0.0)
 
@@ -571,7 +543,7 @@ class FarmSyncOrchestrator:
                     }
                 }
                 trust_result = self.trust_engine.evaluate_trust(
-                    vision_confidence=vision_result.get("confidence", 0.0) if has_photo else 0.0,
+                    vision_confidence=vision_result.get("final_confidence", vision_result.get("confidence", 0.0)) if has_photo else 0.0,
                     is_supported_crop=bool(context.get("final_crop") and not context.get("simulate_unsupported_crop")),
                     doc_registry_match=bool(reg_check.get("owner_match", False)) if (has_land_doc and has_reg) else True,
                     spatial_extent_match=geom_valid,
@@ -596,7 +568,7 @@ class FarmSyncOrchestrator:
                 doc_reg_match = bool(reg_check.get("owner_match", False) and has_reg)
                 spatial_match = (extent_check.get("verification_status") == "MATCH")
             else:
-                doc_reg_match = True
+                doc_reg_match = False
                 spatial_match = bool(has_parcel and spatial_constraints.get("geometry_valid", False))
 
             has_demo_match = bool(reg_check.get("owner_match", False) and has_land_doc and has_reg)
@@ -622,7 +594,7 @@ class FarmSyncOrchestrator:
             }
 
             trust_result = self.trust_engine.evaluate_trust(
-                vision_confidence=vision_result.get("confidence", 0.0) if has_photo else 0.0,
+                vision_confidence=vision_result.get("final_confidence", vision_result.get("confidence", 0.0)) if has_photo else 0.0,
                 is_supported_crop=bool(context.get("final_crop") and not context["simulate_unsupported_crop"]),
                 doc_registry_match=doc_reg_match,
                 spatial_extent_match=spatial_match,

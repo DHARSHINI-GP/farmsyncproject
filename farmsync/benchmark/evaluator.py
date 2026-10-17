@@ -42,7 +42,7 @@ class BenchmarkEvaluator:
         Executes all 50 benchmark queries across the 3 paradigms and computes real metrics.
         """
         if queries is None:
-            queries = get_benchmark_queries()
+            raise ValueError("The historical ground truth predates evidence corrections. Supply newly reviewed query/expected-result records explicitly; use scripts/evaluate_models.py for supplied-photo diagnostics.")
 
         print(f"\n{'='*70}")
         print(f"RUNNING FARMSYNC HEAD-TO-HEAD BENCHMARK (50 QUERIES)")

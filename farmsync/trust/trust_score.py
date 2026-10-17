@@ -60,7 +60,7 @@ class TrustEngine:
     }
 
     def __init__(self):
-        # Proposal-calibrated empirical weights (Section 3.2: sum(w1..w5) == 1.00)
+        # Heuristic policy weights. These are not a fitted probability of correctness.
         self.w1_calib = 0.15
         self.w2_coverage = 0.25
         self.w3_consistency = 0.25
@@ -216,10 +216,10 @@ class TrustEngine:
         # Decision Policy (Bounded Escalation & Abstention per Section 3.2)
         if fts >= self.accept_threshold:
             decision = "ACCEPT"
-            decision_msg = "All evidence verified; deterministic checks passed. Prediction accepted."
+            decision_msg = "Workflow evidence checks satisfied; consult each field's verification status. This score does not establish ownership or image authenticity."
         elif fts >= self.escalate_threshold:
             decision = "ESCALATE"
-            decision_msg = "Intermediate trust score; escalated to Proprietary VLM for secondary verification."
+            decision_msg = "Intermediate evidence score; additional verification or human review is required. Inspect telemetry for any actual model escalation."
         else:
             decision = "ABSTAIN"
             decision_msg = "Critical evidence conflict or missing inputs; explicit abstention triggered for Human Review."

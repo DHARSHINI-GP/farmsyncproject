@@ -1,0 +1,7 @@
+{
+  "model_sha256": "70cf4b2856a959477215600bd2953e75318f2e2a4a324e8e6d9d99d7bdbd1c37",
+  "crop_temperature": 0.8,
+  "stage_temperature": 1.15,
+  "method": "Validation-only bounded temperature fit; evaluated on separate test groups",
+  "protocol": "grouped-train-validation-test-v1"
+}

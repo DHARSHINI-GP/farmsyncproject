@@ -2,6 +2,12 @@ import os
 import re
 import hmac
 import json
+import logging
+import time
+import uuid
+import base64
+import hashlib
+import html
 from dotenv import load_dotenv
 load_dotenv()
 from typing import Dict, Any, Optional, List
@@ -15,6 +21,8 @@ from pydantic import BaseModel, Field
 from farmsync.orchestrator import FarmSyncOrchestrator
 from farmsync.ai.engine import AIAssistantEngine
 from farmsync.spatial.amazon_location import AmazonLocationServiceEngine
+from farmsync.runtime import Runtime
+from farmsync.platform_api import install as install_platform
 from farmsync.aws import check_approved_services, TEXT_MODEL, TEACHER_MODEL, EMBEDDING_MODEL, REGION
 
 app = FastAPI(title="FARMSYNC Enterprise Platform", version="2.0.0")
@@ -65,11 +73,13 @@ async def verify_sensitive_endpoint_access(
        - Trusted local loopback (127.0.0.1, ::1, testclient) is permitted for local operation.
        - Any external network client is REJECTED with 401 Unauthorized before network exposure.
     """
+    if getattr(request.state, "principal", None) or runtime.resolve_session(request):
+        return True
+    if runtime.production or runtime.store.user_count() > 0:
+        raise HTTPException(401, "Sign in with an individual account")
     provided_key = api_key_header or (auth_credentials.credentials if auth_credentials else None)
     if not provided_key and "api-key" in request.headers:
         provided_key = request.headers.get("api-key")
-    if not provided_key and "api_key" in request.query_params:
-        provided_key = request.query_params.get("api_key")
 
     # Also inspect JSON body if provided for POST endpoints
     if not provided_key and request.headers.get("content-type", "").startswith("application/json"):
@@ -90,10 +100,12 @@ async def verify_sensitive_endpoint_access(
                 status_code=401,
                 detail="Unauthorized: Invalid or missing API key for sensitive endpoint."
             )
+        request.state.principal = {"id": "local-admin", "username": "local-admin", "role": "admin"}
         return True
 
     # If no FARMSYNC_API_KEY is configured in env:
     if is_trusted_local_client(request):
+        request.state.principal = {"id": "local-admin", "username": "local-admin", "role": "admin"}
         return True
 
     raise HTTPException(
@@ -104,14 +116,31 @@ async def verify_sensitive_endpoint_access(
 
 @app.middleware("http")
 async def protect_challenge_data(request: Request, call_next):
+    request_id = uuid.uuid4().hex
+    request.state.request_id = request_id
+    started = time.monotonic()
+    response = None
+    origin = request.headers.get('origin')
+    if request.url.path.startswith('/api/') and request.method not in {'GET','HEAD','OPTIONS'} and origin and origin not in ALLOWED_ORIGINS:
+        response = JSONResponse(status_code=403, content={'detail':'Unapproved request origin'})
     # The organizer-provided datasets must not be exposed by unauthenticated APIs.
-    if request.url.path.startswith("/api/") and request.method != "OPTIONS":
+    if response is None and request.url.path.startswith("/api/") and request.method != "OPTIONS" and request.url.path not in {"/api/auth/login", "/api/auth/status"}:
         try:
             credentials = await HTTP_BEARER(request)
             await verify_sensitive_endpoint_access(request, request.headers.get("X-API-Key"), credentials)
+            if request.url.path.startswith("/api/settings/aws") and request.method == "POST":
+                runtime.admin(request)
         except HTTPException as exc:
-            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-    return await call_next(request)
+            response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    if response is None:
+        response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "same-origin"
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    logging.getLogger("farmsync.requests").info(json.dumps({"request_id": request_id, "method": request.method, "path": request.url.path, "status": response.status_code, "latency_ms": round((time.monotonic() - started) * 1000, 2)}))
+    return response
 
 def sanitize_upload_filename(filename: Optional[str]) -> str:
     """
@@ -150,10 +179,13 @@ def sanitize_upload_filename(filename: Optional[str]) -> str:
 orchestrator = FarmSyncOrchestrator()
 ai_engine = AIAssistantEngine(orchestrator=orchestrator)
 location_engine = orchestrator.location_engine
+runtime = Runtime(orchestrator, ai_engine)
+install_platform(app, runtime)
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 IMAGES_DIR = os.path.join(BASE_DIR, "data", "FAI_Product_Challange", "TASK_4", "Images", "images")
 GEO_DIR = os.path.join(BASE_DIR, "data", "FAI_Product_Challange", "TASK_2", "Geospatial_Layer")
 
@@ -215,7 +247,14 @@ async def serve_index():
     index_path = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_path):
         with open(index_path, "r", encoding="utf-8") as f:
-            return f.read()
+            source = f.read()
+        scripts = re.findall(r"<script\b[^>]*>(.*?)</script>", source, flags=re.S)
+        handlers = [html.unescape(v) for v in re.findall(r'\bon\w+="([^"]*)"', source)]
+        hashes = {"'sha256-" + base64.b64encode(hashlib.sha256(v.encode()).digest()).decode() + "'" for v in scripts + handlers if v.strip()}
+        policy = "default-src 'none'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; "
+        policy += "script-src 'self' 'unsafe-hashes' " + " ".join(sorted(hashes)) + "; "
+        policy += "style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com;"
+        return HTMLResponse(source, headers={"Content-Security-Policy": policy, "X-Frame-Options": "DENY"})
     return "<h1>FARMSYNC UI Initializing...</h1>"
 
 @app.get("/api/parcels")
@@ -344,29 +383,17 @@ async def get_waterbodies():
     return {"type": "FeatureCollection", "features": []}
 
 @app.post("/api/ai/query")
-def run_ai_query(req: AIQueryRequest, _auth: bool = Depends(verify_sensitive_endpoint_access)):
-    """Executes natural language AI query with Bedrock or Enterprise Reasoner."""
-    try:
-        res = ai_engine.process_query(
-            query=req.query,
-            survey_no=req.survey_no,
-            document_path=req.document_path,
-            force_escalate=req.force_escalate or False,
-            simulate_conflict=req.simulate_conflict or False,
-            parcel_id=req.parcel_id,
-            image_filename=req.image_filename
-        )
-        return res
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def run_ai_query(req: AIQueryRequest, request: Request, _auth: bool = Depends(verify_sensitive_endpoint_access)):
+    return runtime.analyze(runtime.user(request), req.model_dump())
 
 @app.get("/api/documents/list")
-async def list_available_documents():
+async def list_available_documents(request: Request):
     """Lists official government land acquisition documents available for real extraction."""
     docs_dir = os.path.join(GEO_DIR.replace("Geospatial_Layer", "Land_documents"))
     categorized = {}
     if os.path.exists(docs_dir):
         for root, dirs, files in os.walk(docs_dir):
+            dirs[:] = [d for d in dirs if d != "Uploads"]
             for f in files:
                 if f.lower().endswith(".pdf"):
                     rel = os.path.relpath(os.path.join(root, f), docs_dir)
@@ -376,6 +403,9 @@ async def list_available_documents():
                         "relative_path": rel,
                         "size_bytes": os.path.getsize(os.path.join(root, f))
                     })
+    owned = runtime.store.assets(runtime.user(request)["id"], "pdf")
+    if owned:
+        categorized["My uploads"] = [{"filename": a["original_name"], "relative_path": "asset:" + a["id"], "size_bytes": 0} for a in owned]
     return {"total_categories": len(categorized), "documents": categorized}
 
 @app.post("/api/documents/upload")
@@ -384,71 +414,8 @@ async def upload_document(
     file: UploadFile = File(...),
     _auth: bool = Depends(verify_sensitive_endpoint_access)
 ):
-    """
-    Uploads a real PDF land document for extraction and analysis.
-    Hardened with:
-    - Access control authentication dependency for network exposure.
-    - Strict filename sanitization and path traversal prevention.
-    - Maximum upload size enforcement (15 MB default).
-    - Magic bytes (%PDF) signature validation.
-    """
-    clean_filename = sanitize_upload_filename(file.filename)
-    
-    upload_dir = os.path.join(GEO_DIR.replace("Geospatial_Layer", "Land_documents"), "Uploads")
-    os.makedirs(upload_dir, exist_ok=True)
-    
-    # Path traversal canonical verification
-    target_path = os.path.abspath(os.path.join(upload_dir, clean_filename))
-    real_upload_dir = os.path.abspath(upload_dir)
-    if not target_path.startswith(real_upload_dir + os.sep) and target_path != real_upload_dir:
-        raise HTTPException(status_code=400, detail="Directory traversal attempt detected.")
-
-    # Content-Length header verification
-    content_length = request.headers.get("content-length")
-    if content_length:
-        try:
-            if int(content_length) > MAX_UPLOAD_SIZE_BYTES:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"Upload payload exceeds maximum allowed size ({MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)} MB)."
-                )
-        except ValueError:
-            pass
-
-    # Stream in 64KB chunks to prevent DoS memory exhaustion
-    chunk_size = 64 * 1024
-    total_bytes = 0
-    chunks = []
-    while True:
-        chunk = await file.read(chunk_size)
-        if not chunk:
-            break
-        total_bytes += len(chunk)
-        if total_bytes > MAX_UPLOAD_SIZE_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=f"Upload payload exceeds maximum allowed size ({MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)} MB)."
-            )
-        chunks.append(chunk)
-
-    if total_bytes == 0:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-
-    content = b"".join(chunks)
-
-    # Magic bytes file signature verification
-    if not content.startswith(b"%PDF"):
-        raise HTTPException(status_code=400, detail="Invalid PDF file format: missing %PDF header.")
-
-    with open(target_path, "wb") as f:
-        f.write(content)
-        
-    return {
-        "status": "UPLOAD_SUCCESS",
-        "filename": clean_filename,
-        "saved_path": os.path.relpath(target_path, os.path.dirname(upload_dir)),
-        "size_bytes": len(content)
-    }
+    sanitize_upload_filename(file.filename)
+    return await runtime.upload(request, file, "pdf", limit=MAX_UPLOAD_SIZE_BYTES)
 
 @app.post("/api/settings/aws")
 async def update_aws_settings(
@@ -546,30 +513,20 @@ async def get_geofence_status(survey_no: str):
     return location_engine.evaluate_cadastral_geofence(survey_no)
 
 @app.post("/api/orchestrate")
-def run_orchestration(req: OrchestrateRequest, _auth: bool = Depends(verify_sensitive_endpoint_access)):
-    """Executes full agentic orchestration workflow without fabrication."""
-    effective_query = req.query
-    if req.survey_no and f"Survey {req.survey_no}" not in effective_query and f"Survey Number {req.survey_no}" not in effective_query:
-        effective_query = f"Analyze Survey Number {req.survey_no} in Keelathattaparai village: {req.query}"
-
-    res = orchestrator.execute_request(
-        query=effective_query,
-        document_path=req.document_path,
-        survey_no=req.survey_no,
-        force_escalate_vision=req.force_escalate,
-        simulate_conflict=req.simulate_conflict,
-        simulate_unsupported_crop=req.simulate_ood,
-        parcel_id=req.parcel_id,
-        image_filename=req.image_filename
-    )
-    return res
+def run_orchestration(req: OrchestrateRequest, request: Request, _auth: bool = Depends(verify_sensitive_endpoint_access)):
+    return runtime.analyze(runtime.user(request), req.model_dump(), ai=False)
 
 @app.get("/api/image/{filename}")
-async def get_image(filename: str):
+async def get_image(filename: str, request: Request):
     """Serves real field crop photo. Strictly refuses to return unrelated fallback photos."""
     if not filename or filename.lower() in ["none", "null", "undefined", "default"]:
         raise HTTPException(status_code=404, detail="No field photo on record for parcel")
 
+    if filename.startswith("asset:"):
+        asset = runtime.store.asset(filename[6:], runtime.user(request)["id"])
+        if not asset or asset["kind"] != "image":
+            raise HTTPException(404, "Image not found")
+        return FileResponse(asset["path"], media_type="image/jpeg")
     record = orchestrator.vision.image_registry.get(filename)
     if not record:
         raise HTTPException(status_code=404, detail="Image is not in the authorized photo library")
@@ -581,8 +538,10 @@ async def get_image(filename: str):
 
 
 @app.get("/api/images")
-def list_image_evidence():
-    return {"images": [{"filename": filename} for filename in sorted(orchestrator.vision.image_registry)]}
+def list_image_evidence(request: Request):
+    images = [{"filename": f} for f in sorted(orchestrator.vision.image_registry) if not f.startswith("asset:")]
+    images += [{"filename": "asset:" + a["id"], "label": a["original_name"]} for a in runtime.store.assets(runtime.user(request)["id"], "image")]
+    return {"images": images}
 
 @app.get("/api/knowledge/status")
 async def get_knowledge_status():

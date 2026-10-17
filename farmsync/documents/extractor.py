@@ -1,4 +1,7 @@
 import os
+from collections import OrderedDict
+from copy import deepcopy
+from hashlib import sha256
 import re
 import json
 from typing import Dict, Any, Optional, List
@@ -312,6 +315,7 @@ class DocumentRegistryEngine:
             return
 
         for root, dirs, files in os.walk(self.land_docs_dir):
+            dirs[:] = [d for d in dirs if d != "Uploads"]
             for f in files:
                 if f.lower().endswith(".pdf"):
                     rel_path = os.path.relpath(os.path.join(root, f), self.land_docs_dir)
@@ -357,11 +361,34 @@ class DocumentRegistryEngine:
         """Lazy load easyocr only if needed for scanned documents."""
         if self._easyocr_reader is None:
             try:
-                import easyocr
-                self._easyocr_reader = easyocr.Reader(["en"], gpu=False, download_enabled=False)
+                from farmsync.documents.ocr import reader
+                self._easyocr_reader = reader()
             except Exception:
                 self._easyocr_reader = None
         return self._easyocr_reader
+
+    def extract_source_claims(self, path):
+        """Bounded per-engine cache; bytes and OCR configuration identify a version."""
+        from farmsync.documents.evidence import extract_claims
+        from pathlib import Path
+        path = Path(path).resolve()
+        signature = (str(path), sha256(path.read_bytes()).hexdigest(), os.getenv('FARMSYNC_OCR_ENABLED','false'), os.getenv('FARMSYNC_OCR_LANGUAGES','ta,en'))
+        cache = getattr(self, '_source_claim_cache', None)
+        if cache is None:
+            cache = self._source_claim_cache = OrderedDict()
+        if signature in cache:
+            cache.move_to_end(signature)
+            return deepcopy(cache[signature])
+        records, notices = extract_claims(path)
+        if notices and signature[2].lower() == 'true':
+            reader = self._get_easyocr_reader()
+            if reader is not None:
+                records, notices = extract_claims(path, reader=reader)
+        if not notices:
+            cache[signature] = deepcopy((records, notices))
+            while len(cache) > 16:
+                cache.popitem(last=False)
+        return records, notices
 
     def extract_document_claims(
         self, 
@@ -399,7 +426,10 @@ class DocumentRegistryEngine:
             allowed_root = os.path.realpath(self.land_docs_dir)
             candidate = os.path.realpath(os.path.join(allowed_root, norm_doc))
             try:
+                private_root = getattr(self, "private_asset_root", None)
                 within_root = os.path.commonpath([allowed_root, candidate]) == allowed_root
+                if private_root:
+                    within_root = within_root or os.path.commonpath([os.path.realpath(private_root), candidate]) == os.path.realpath(private_root)
             except ValueError:
                 within_root = False
             if not within_root or not norm_doc.lower().endswith(".pdf"):
@@ -426,6 +456,7 @@ class DocumentRegistryEngine:
                 # Check recursive search by basename in land_docs_dir
                 target_bn = os.path.basename(norm_doc)
                 for root, dirs, files in os.walk(self.land_docs_dir):
+                    dirs[:] = [d for d in dirs if d != "Uploads"]
                     if target_bn in files:
                         resolved_full_path = os.path.join(root, target_bn)
                         rel_doc_name = target_bn
@@ -460,241 +491,36 @@ class DocumentRegistryEngine:
                 "status": "DOCUMENT_NOT_FOUND"
             }
 
-        # ── Step 1: Parse tables and text using pdfplumber ──────────────────────
-        parsed_claims = None
+        from farmsync.documents.evidence import extract_claims
         try:
-            with pdfplumber.open(resolved_full_path) as pdf:
-                for page_idx, page in enumerate(pdf.pages):
-                    tables = page.extract_tables()
-                    for table in tables:
-                        for row in table:
-                            if not row or len(row) < 3:
-                                continue
-                            
-                            c_row = [re.sub(r'\s+', ' ', str(c).strip()) if c else '' for c in row]
-                            
-                            # Check if any cell in row matches our target survey number
-                            # e.g., '1/3B', '84/4', '222', or base '384'
-                            matched_cell = None
-                            for cell in c_row[:3]:
-                                if cell == clean_no or cell.startswith(clean_no + "/") or cell.startswith(clean_no + " "):
-                                    matched_cell = cell
-                                    break
-                            
-                            if matched_cell:
-                                # Extracted candidate row
-                                # Identify columns by structure
-                                extent_str = ""
-                                owner_str = ""
-                                land_type = "Dry"
-                                trees_str = ""
-
-                                for idx, cell in enumerate(c_row):
-                                    if idx == 0 and cell.isdigit() and len(cell) <= 3:
-                                        continue
-                                    if cell == matched_cell:
-                                        continue
-                                    # Extent pattern (e.g., '0.60.50', '1.0100', '10.35', '0.79')
-                                    if not extent_str and re.search(r'\d+\.\d+', cell):
-                                        extent_str = cell
-                                    # Land type pattern
-                                    elif cell.lower() in ["dry", "wet", "natham", "punjai", "nanjai"]:
-                                        land_type = cell
-                                    # Tree pattern
-                                    elif "palm" in cell.lower() or "tree" in cell.lower():
-                                        trees_str = cell
-                                    # Owner pattern (text with letters and commas)
-                                    elif len(cell) > 3 and not re.match(r'^[\d\.\s\-\/]+$', cell):
-                                        if "digitally signed" in cell.lower() or "tahsildar" in cell.lower():
-                                            continue
-                                        if not owner_str:
-                                            owner_str = cell
-                                        else:
-                                            owner_str += " | " + cell
-
-                                if not owner_str:
-                                    if clean_no == "384":
-                                        owner_str = "Ramesh Kumar"
-                                    elif clean_no in self.revenue_registry:
-                                        owner_str = self.revenue_registry[clean_no]["registered_owner"].split(" S/o")[0].split(" W/o")[0].split(" D/o")[0]
-
-                                # Parse extent into acres
-                                claimed_acres = 0.0
-                                claimed_ha = 0.0
-                                if extent_str:
-                                    m = re.findall(r'\d+\.?\d*', extent_str)
-                                    if len(m) == 1:
-                                        val = float(m[0])
-                                        # If > 15, likely already in acres or sqm
-                                        if val < 10.0 and "hect" in (page.extract_text() or "").lower():
-                                            claimed_ha = val
-                                            claimed_acres = round(claimed_ha * 2.47105, 3)
-                                        else:
-                                            claimed_acres = val
-                                    elif len(m) >= 2:
-                                        # Format: 0.60.50 (Hectare.Are.SqM)
-                                        try:
-                                            h = float(m[0])
-                                            a = float(m[1]) / 100.0 if len(m) > 1 else 0.0
-                                            sq = float(m[2]) / 10000.0 if len(m) > 2 else 0.0
-                                            claimed_ha = round(h + a + sq, 4)
-                                            claimed_acres = round(claimed_ha * 2.47105, 3)
-                                        except Exception:
-                                            pass
-                                # Check if multiple subdivisions exist on the same table for this base survey
-                                if "/" not in clean_no:
-                                    sub_rows = [r for r in table if r and len(r) > 2 and str(r[0]).strip() == clean_no]
-                                    if len(sub_rows) > 1:
-                                        total_sub_ha = 0.0
-                                        for sr in sub_rows:
-                                            raw_e = str(sr[2]).strip()
-                                            digits = re.findall(r'(\d+)', raw_e)
-                                            if len(digits) >= 2:
-                                                try:
-                                                    h_val = float(digits[0])
-                                                    a_val = float(digits[1]) / 100.0 if len(digits) > 1 else 0.0
-                                                    sq_val = float(digits[2]) / 10000.0 if len(digits) > 2 else 0.0
-                                                    total_sub_ha += (h_val + a_val + sq_val)
-                                                except:
-                                                    pass
-                                        if total_sub_ha > 0:
-                                            claimed_ha = round(total_sub_ha, 4)
-                                            claimed_acres = round(claimed_ha * 2.47105, 3)
-
-                                if not owner_str:
-                                    owner_str = "Interested Landholder"
-
-                                parsed_claims = {
-                                    "found": True,
-                                    "survey_no": matched_cell,
-                                    "extracted_owner": owner_str,
-                                    "claimed_extent_acres": claimed_acres,
-                                    "claimed_extent_hectares": claimed_ha,
-                                    "land_classification": land_type,
-                                    "trees": trees_str,
-                                    "page_number": page_idx + 1,
-                                    "document_source": rel_doc_name,
-                                    "document_path": resolved_full_path,
-                                    "ocr_confidence": 0.96,
-                                    "extraction_method": "pdfplumber_table_parser",
-                                    "raw_row_data": c_row
-                                }
-                                break
-                        if parsed_claims:
-                            break
-                    if parsed_claims:
-                        break
-        except Exception as e:
-            print(f"Error parsing PDF {resolved_full_path}: {e}")
-
-        # ── Step 2: Text regex search if table parsing missed it ───────────────
-        if not parsed_claims:
-            try:
-                with pdfplumber.open(resolved_full_path) as pdf:
-                    for page_idx, page in enumerate(pdf.pages):
-                        txt = page.extract_text() or ""
-                        if clean_no in txt:
-                            # Search for lines containing survey number (handles multiple subdivisions e.g. 384 1, 384 2)
-                            lines = txt.split("\n")
-                            matched_lines = []
-                            total_sub_extent = 0.0
-                            for line in lines:
-                                if re.search(r'(?:^|[^\d])' + re.escape(clean_no) + r'(?:[/\s\-]|$)', line):
-                                    matched_lines.append(line)
-                                    # Parse Hectare - Ares pattern (e.g. '3 - 26.50' or '0.40.50')
-                                    ha_m = re.search(r'(\d+)\s*-\s*(\d+(?:\.\d+)?)', line)
-                                    if ha_m:
-                                        h_val = int(ha_m.group(1))
-                                        a_val = float(ha_m.group(2))
-                                        total_sub_extent += round((h_val + a_val / 100.0) * 2.47105, 3)
-                                    else:
-                                        ext_m = re.search(r'(\d+\.\d+)', line)
-                                        if ext_m:
-                                            total_sub_extent += float(ext_m.group(1))
-
-                            if matched_lines:
-                                first_l = matched_lines[0]
-                                if clean_no == "384":
-                                    owner_str = "Ramesh Kumar"
-                                elif clean_no in self.revenue_registry:
-                                    owner_str = self.revenue_registry[clean_no]["registered_owner"].split(" S/o")[0].split(" W/o")[0].split(" D/o")[0]
-                                else:
-                                    owner_str = owner_cand if len(owner_cand) > 3 else "Pattadar Claimant"
-
-                                parsed_claims = {
-                                    "found": True,
-                                    "survey_no": clean_no,
-                                    "extracted_owner": owner_str,
-                                    "claimed_extent_acres": round(total_sub_extent, 3) if total_sub_extent > 0 else (self.cadastral_registry.get(clean_no, {}).get("registered_extent_acres", 0.0)),
-                                    "land_classification": "Ryotwari Dry (Punjai)",
-                                    "page_number": page_idx + 1,
-                                    "document_source": rel_doc_name,
-                                    "document_path": resolved_full_path,
-                                    "ocr_confidence": 0.92,
-                                    "extraction_method": "pdfplumber_regex_line_parser",
-                                    "raw_text_snippet": " | ".join(l.strip() for l in matched_lines[:3]),
-                                    "status": "EXTRACTED_FROM_REAL_PDF"
-                                }
-                                break
-            except Exception as e:
-                pass
-
-        # ── Step 4: Scanned OCR Fallback only if digital parsing yielded nothing ──
-        if not parsed_claims:
-            reader = self._get_easyocr_reader()
-            if reader:
-                try:
-                    import io, numpy as np
-                    from PIL import Image
-                    import pypdf
-                    p_reader = pypdf.PdfReader(resolved_full_path)
-                    for page_idx, p_page in enumerate(p_reader.pages[:2]):
-                        if p_page.images:
-                            img = p_page.images[0]
-                            pil_img = Image.open(io.BytesIO(img.data)).convert("RGB")
-                            ocr_res = reader.readtext(np.array(pil_img))
-                            for bbox, ocr_txt, conf in ocr_res:
-                                if clean_no in ocr_txt:
-                                    parsed_claims = {
-                                        "found": True,
-                                        "survey_no": clean_no,
-                                        "extracted_owner": "Registered Landholder",
-                                        "claimed_extent_acres": 0.0,
-                                        "page_number": page_idx + 1,
-                                        "document_source": rel_doc_name,
-                                        "document_path": resolved_full_path,
-                                        "ocr_confidence": round(float(conf), 2),
-                                        "extraction_method": "easyocr_image_reader",
-                                        "raw_text_snippet": ocr_txt
-                                    }
-                                    break
-                        if parsed_claims:
-                            break
-                except Exception as e:
-                    pass
-
-        # ── STRICT REFUSE-TO-INVENT POLICY: If not found, return explicit False ─
-        if not parsed_claims:
-            return {
-                "found": False,
-                "document_source": rel_doc_name,
-                "document_path": resolved_full_path,
-                "survey_no": clean_no,
-                "extracted_owner": None,
-                "claimed_extent_acres": None,
-                "error": f"Survey number '{clean_no}' was not found in document '{rel_doc_name}'. No matching schedule entry exists.",
-                "status": "NOT_FOUND_IN_DOCUMENT"
-            }
-
-        # Handle red-team mismatch simulation
+            records, notices = self.extract_source_claims(resolved_full_path)
+        except Exception as exc:
+            return {"found": False, "survey_no": clean_no, "document_source": rel_doc_name,
+                    "extracted_owner": None, "claimed_extent_acres": None,
+                    "status": "DOCUMENT_PARSE_FAILED", "error": type(exc).__name__}
+        matches = [r for r in records if r["survey_no"].casefold() == clean_no.casefold()]
+        if not matches:
+            return {"found": False, "survey_no": clean_no, "document_source": rel_doc_name,
+                    "extracted_owner": None, "claimed_extent_acres": None,
+                    "status": "SURVEY_NOT_FOUND", "notices": notices,
+                    "error": "No explicitly identified survey row was extracted; no fallback values were substituted."}
+        values = {(r.get("extracted_owner"), r.get("claimed_extent_acres"), r.get("document_village")) for r in matches}
+        if len(values) > 1:
+            return {"found": False, "survey_no": clean_no, "document_source": rel_doc_name,
+                    "extracted_owner": None, "claimed_extent_acres": None,
+                    "status": "AMBIGUOUS_DOCUMENT_ROWS", "observations": matches,
+                    "error": "Multiple different claims require village/subdivision identification or human review."}
+        result = matches[0]
+        result["notices"] = notices
+        result["observations"] = matches
         if simulate_mismatch:
-            parsed_claims["extracted_owner"] = "Unknown Discrepant Claimant"
-            if parsed_claims["claimed_extent_acres"]:
-                parsed_claims["claimed_extent_acres"] = round(parsed_claims["claimed_extent_acres"] * 1.35, 2)
-            parsed_claims["ocr_confidence"] = 0.58
-
-        parsed_claims["status"] = "EXTRACTED_FROM_REAL_PDF"
-        return parsed_claims
+            result = dict(result)
+            result["extracted_owner"] = "Simulated conflicting claimant"
+            if result["claimed_extent_acres"] is not None:
+                result["claimed_extent_acres"] = round(result["claimed_extent_acres"] * 1.35, 6)
+            result["simulation_applied"] = True
+            result["status"] = "SIMULATED_CONFLICT_NOT_SOURCE_EVIDENCE"
+        return result
 
     def _verify_owner_match(self, doc_owner: str, reg_owner: str) -> bool:
         """
@@ -795,21 +621,21 @@ class DocumentRegistryEngine:
         ror_found = (revenue_record is not None)
 
         # Extent check against Cadastral / Revenue extent
-        doc_extent = document_claims.get("claimed_extent_acres") or 0.0
+        doc_extent = document_claims.get("claimed_extent_acres")
         official_extent = (
             revenue_record.get("registered_extent_acres")
             if ror_found
-            else (cad_record.get("registered_extent_acres") if cad_found else 0.0)
+            else (cad_record.get("registered_extent_acres") if cad_found else None)
         )
 
-        if doc_extent > 0 and official_extent > 0:
+        if doc_extent is not None and official_extent is not None and doc_extent > 0 and official_extent > 0:
             extent_diff = abs(doc_extent - official_extent)
             extent_diff_pct = (extent_diff / official_extent) * 100.0
             extent_match = (extent_diff_pct <= 5.0)  # 5% tolerance
         else:
-            extent_diff = 0.0
-            extent_diff_pct = 0.0
-            extent_match = (doc_extent == 0.0 and official_extent == 0.0)
+            extent_diff = None
+            extent_diff_pct = None
+            extent_match = False
 
         # Case 1: Document claims were NOT found in the PDF
         if not doc_found:
@@ -872,12 +698,16 @@ class DocumentRegistryEngine:
         owner_match = self._verify_owner_match(doc_owner, reg_owner)
         is_authoritative = bool(revenue_record.get("is_authoritative_government_record", False))
 
-        if owner_match:
+        if not doc_owner:
+            owner_status = 'DOCUMENT_OWNER_MISSING'
+        elif owner_match:
             owner_status = "OWNERSHIP_VERIFIED_MATCH" if is_authoritative else "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
         else:
             owner_status = "OWNERSHIP_DISCREPANCY_DETECTED"
 
-        if owner_match and extent_match:
+        if not doc_owner or doc_extent is None:
+            overall_status = 'INCOMPLETE_DOCUMENT_EVIDENCE'
+        elif owner_match and extent_match:
             overall_status = "CONSISTENT_OFFICIAL_MATCH" if is_authoritative else "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
         else:
             overall_status = "DISCREPANCY_DETECTED"
@@ -887,7 +717,7 @@ class DocumentRegistryEngine:
             if (owner_match and not is_authoritative) else (
                 f"Ownership verified against official Record of Rights: Document claimant '{doc_owner}' matches registered owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')})."
                 if owner_match else
-                f"Ownership discrepancy detected: Document claimant '{doc_owner}' does NOT match demonstration Record of Rights owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')})."
+                ("Document owner was not extracted; ownership comparison is unresolved." if not doc_owner else f"Ownership discrepancy detected: Document claimant '{doc_owner}' does NOT match demonstration Record of Rights owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')}).")
             )
         )
 
@@ -910,8 +740,8 @@ class DocumentRegistryEngine:
             "registry_disclaimer": "Matches demonstration benchmark Record of Rights; does not constitute legal government title confirmation from TamilNilam portal.",
             "official_extent_acres": official_extent,
             "document_extent_acres": doc_extent,
-            "extent_diff_acres": round(extent_diff, 3),
-            "extent_diff_pct": round(extent_diff_pct, 2),
+            "extent_diff_acres": round(extent_diff, 3) if extent_diff is not None else None,
+            "extent_diff_pct": round(extent_diff_pct, 2) if extent_diff_pct is not None else None,
             "extent_match": extent_match,
             "land_classification": revenue_record.get("land_classification") or document_claims.get("land_classification"),
             "document_source": document_claims.get("document_source"),

@@ -1,0 +1,32 @@
+{
+  "purify.min.js": {
+    "package": "dompurify",
+    "version": "3.4.17",
+    "sha256": "cd37898f9782adf54820c413191b5691803f0f137c799d6edcfd38523b4c2c31",
+    "source": "https://registry.npmjs.org/dompurify/-/dompurify-3.4.17.tgz"
+  },
+  "lucide.js": {
+    "package": "lucide",
+    "version": "1.59.0",
+    "sha256": "417e28eaae93a7c79e97d438d02037a3e8e3efa57110206ec2a2211e99ff5f6a",
+    "source": "https://registry.npmjs.org/lucide/-/lucide-1.59.0.tgz"
+  },
+  "marked.umd.js": {
+    "package": "marked",
+    "version": "18.1.1",
+    "sha256": "b82b9334406d8bdd16b6236c08de1cb65b2a859873ca9503d9cc0b292ca3c12a",
+    "source": "https://registry.npmjs.org/marked/-/marked-18.1.1.tgz"
+  },
+  "leaflet.js": {
+    "package": "leaflet",
+    "version": "1.9.4",
+    "sha256": "db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a",
+    "source": "https://registry.npmjs.org/leaflet/-/leaflet-1.9.4.tgz"
+  },
+  "leaflet.css": {
+    "package": "leaflet",
+    "version": "1.9.4",
+    "sha256": "a7837102824184820dfa198d1ebcd109ff6d0ff9a2672a074b9a1b4d147d04c6",
+    "source": "https://registry.npmjs.org/leaflet/-/leaflet-1.9.4.tgz"
+  }
+}

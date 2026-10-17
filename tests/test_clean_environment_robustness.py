@@ -149,7 +149,12 @@ class TestDocumentUploadEndpointMultipart:
         from farmsync.server import app
 
         client = TestClient(app)
-        dummy_pdf_content = b"%PDF-1.4 test content for multipart upload verification"
+        from reportlab.pdfgen.canvas import Canvas
+        buffer = io.BytesIO()
+        canvas = Canvas(buffer)
+        canvas.drawString(72, 720, 'Survey 384')
+        canvas.save()
+        dummy_pdf_content = buffer.getvalue()
         files = {
             "file": ("test_upload.pdf", io.BytesIO(dummy_pdf_content), "application/pdf")
         }

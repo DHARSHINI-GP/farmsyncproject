@@ -18,16 +18,16 @@ def test_confident_multimodal_workflow(orchestrator):
 
     assert vobj["trust_metrics"]["verification_status"] == "VERIFIED_ABSTAIN"
     assert vobj["trust_metrics"]["task_trust_score_fts"] < 0.70
-    assert vobj["trust_metrics"]["signal_breakdown"]["evidence_coverage"] == 0.33
-    assert vobj["trust_metrics"]["signal_breakdown"]["conflict_penalty"] == 0.25
+    assert vobj["trust_metrics"]["signal_breakdown"]["evidence_coverage"] == 0.0
+    assert vobj["trust_metrics"]["signal_breakdown"]["conflict_penalty"] == 0.75
     assert vobj["extracted_attributes"]["ownership_verified"] is False
-    assert vobj["extracted_attributes"]["ownership_status"] == "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
-    assert vobj["extracted_attributes"]["demo_record_matched"] is True
+    assert vobj["extracted_attributes"]["ownership_status"] == "DOCUMENT_EVIDENCE_MISSING"
+    assert vobj["extracted_attributes"]["demo_record_matched"] is False
     assert vobj["extracted_attributes"]["is_authoritative_government_record"] is False
     assert vobj["extracted_attributes"]["parcel_geometry_verified"] is True
     assert vobj["extracted_attributes"]["predicted_crop"] is None
     assert vobj["extracted_attributes"]["growth_stage"] is None
-    assert res["baseline_comparison"]["FARMSYNC"]["cost_savings_vs_premium_pct"] >= 80.0
+    assert res["baseline_comparison"]["FARMSYNC"]["cost_savings_vs_premium_pct"] is None
     
     # Assert DAG execution state
     executed_dag = res["executed_dag"]
@@ -37,13 +37,33 @@ def test_confident_multimodal_workflow(orchestrator):
         assert task["status"] == "COMPLETED"
         assert task["has_result"] is True
 
+
+def test_document_from_different_village_is_not_applied(orchestrator,monkeypatch):
+    monkeypatch.setattr(orchestrator.docs,'extract_document_claims',lambda **_: {
+        'found':True,'survey_no':'384','document_source':'other-village.pdf',
+        'document_village':'Different Village','extracted_owner':'Another Claimant',
+        'claimed_extent_acres':10.349,'status':'SOURCE_FIELDS_EXTRACTED'})
+    result=orchestrator.execute_request('Inspect Survey 384')['verified_result_object']
+    assert result['extracted_attributes']['document_found'] is False
+    assert result['extracted_attributes']['document_owner'] is None
+    assert result['source_evidence'][0]['extraction_status']=='DOCUMENT_VILLAGE_CONFLICT'
+
 def test_low_confidence_teacher_escalation(orchestrator, monkeypatch):
     """Case 2: Low-Confidence Perception -> Automatic Escalation to Teacher VLM"""
     query = "Using the supplied land document and field photograph for Keelathattaparai village, identify Survey Number 384, verify parcel and owner, predict crop and growth stage, and return verified recommendation."
     # Controlled aligned-photo scenario to test escalation independently of the
     # bundled datasets, whose matching survey numbers do not imply co-location.
     lookup = orchestrator.vision.get_image_for_survey
-    monkeypatch.setattr(orchestrator.vision, "get_image_for_survey", lambda survey, parcel=None: lookup(survey))
+    def aligned_photo(survey, parcel=None):
+        record = dict(lookup(survey))
+        center = orchestrator.spatial.get_parcel("384")["centroid"]
+        record.update(latitude=center["latitude"], longitude=center["longitude"])
+        return record
+    monkeypatch.setattr(orchestrator.vision, "get_image_for_survey", aligned_photo)
+    monkeypatch.setattr(orchestrator.docs, "extract_document_claims", lambda **kwargs: {
+        "found": True, "survey_no": "384", "extracted_owner": "Ramesh Kumar",
+        "claimed_extent_acres": 10.349, "document_source": "controlled-valid-source.pdf"
+    })
     res = orchestrator.execute_request(query, force_escalate_vision=True)
     vobj = res["verified_result_object"]
 

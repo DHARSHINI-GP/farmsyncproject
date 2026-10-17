@@ -67,7 +67,7 @@ class CropVisionPipeline:
 
             self.model = MultiTaskCropNet(len(self.crop_classes), len(self.stage_classes))
             if os.path.exists(self.weights_path):
-                state = torch.load(self.weights_path, map_location=torch.device("cpu"))
+                state = torch.load(self.weights_path, map_location=torch.device("cpu"), weights_only=True)
                 self.model.load_state_dict(state)
                 print(f"Loaded trained CropNet weights from {self.weights_path}")
             else:
@@ -97,6 +97,17 @@ class CropVisionPipeline:
         self.image_registry: Dict[str, Dict[str, Any]] = {}
         self.survey_image_index: Dict[str, List[str]] = {}
         self._build_index()
+        from farmsync.vision.calibration import load_calibration
+        self.calibration = load_calibration(self.weights_path)
+        self.crop_temperature = self.calibration["crop_temperature"] if self.calibration else 1.0
+        self.stage_temperature = self.calibration["stage_temperature"] if self.calibration else 1.0
+        try:
+            metadata = json.loads(open(os.path.join(self.weights_dir, "classes.json"), encoding="utf-8").read())
+            self.class_validation_support = metadata.get("per_class_test_support", {})
+            self.stage_validation_support = metadata.get('per_stage_test_support', {})
+        except (OSError, ValueError):
+            self.class_validation_support = {}
+            self.stage_validation_support = {}
 
     def _init_bedrock_client(self):
         """Initializes Bedrock client if AWS credentials are available."""
@@ -301,8 +312,8 @@ class CropVisionPipeline:
                 feat = self.pool(self.backbone(tensor))
                 feat = torch.flatten(feat, 1)
                 crop_logits, stage_logits = self.model(feat)
-                crop_probs = torch.softmax(crop_logits, dim=1).squeeze()
-                stage_probs = torch.softmax(stage_logits, dim=1).squeeze()
+                crop_probs = torch.softmax(crop_logits / self.crop_temperature, dim=1).squeeze()
+                stage_probs = torch.softmax(stage_logits / self.stage_temperature, dim=1).squeeze()
 
             # Rank predictions
             top3_prob, top3_idx = torch.topk(crop_probs, 3)
@@ -340,7 +351,8 @@ class CropVisionPipeline:
             pred_stage = "unclassified"
 
         confidence_threshold = 0.75
-        needs_escalation = (combined_conf < confidence_threshold) or is_ood or force_escalate
+        insufficient_validation = self.class_validation_support.get(pred_crop, 0) < 5 or self.stage_validation_support.get(pred_stage, 0) < 5
+        needs_escalation = (combined_conf < confidence_threshold) or is_ood or force_escalate or insufficient_validation
 
         # ── Step 3: Teacher Model Invocation ───────────────────────────────────
         final_crop = pred_crop
@@ -384,6 +396,8 @@ class CropVisionPipeline:
 
         latency_ms = int((time.time() - start_time) * 1000)
 
+        if insufficient_validation and not is_independent_teacher:
+            final_conf = min(final_conf, 0.64)
         return {
             "has_image": True,
             "image_filename": filename,
@@ -392,6 +406,8 @@ class CropVisionPipeline:
             "predicted_crop": pred_crop,
             "predicted_stage": pred_stage,
             "confidence": combined_conf,
+            "confidence_calibration": self.calibration.get("method") if self.calibration else "Uncalibrated model confidence",
+            "insufficient_class_test_support": insufficient_validation,
             "crop_confidence": crop_conf,
             "stage_confidence": stage_conf,
             "shannon_entropy": round(entropy, 3),
@@ -481,9 +497,8 @@ class CropVisionPipeline:
             feats = self.pool(self.backbone(batch))
             feats = torch.flatten(feats, 1)
             c_logits, s_logits = self.model(feats)
-            # Temperature scaling for teacher calibration (T=0.7)
-            mean_c_probs = torch.softmax(c_logits / 0.7, dim=1).mean(dim=0)
-            mean_s_probs = torch.softmax(s_logits / 0.7, dim=1).mean(dim=0)
+            mean_c_probs = torch.softmax(c_logits / self.crop_temperature, dim=1).mean(dim=0)
+            mean_s_probs = torch.softmax(s_logits / self.stage_temperature, dim=1).mean(dim=0)
 
         best_c = torch.argmax(mean_c_probs).item()
         best_s = torch.argmax(mean_s_probs).item()
@@ -500,7 +515,7 @@ class CropVisionPipeline:
             "stage_confidence": round(stage_conf, 3),
             "is_independent_teacher": False,
             "teacher_source": "LOCAL_MODEL_TTA_FALLBACK",
-            "ensemble_method": "Multi-Scale TTA (3 augmentations, T=0.7)"
+            "ensemble_method": "Multi-Scale TTA using the student temperatures; ensemble confidence has not been independently calibrated"
         }
 
 CropVisionClassifier = CropVisionPipeline

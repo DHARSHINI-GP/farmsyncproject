@@ -19,15 +19,31 @@
     "harvesting",
     "flowering"
   ],
-  "best_val_crop_accuracy_pct": 91.28,
-  "total_training_samples": 3031,
-  "validation_split_strategy": "stratified_group_by_cadastral_parcel",
-  "train_samples_count": 2435,
-  "val_samples_count": 596,
-  "train_parcels_count": 2321,
-  "val_parcels_count": 578,
-  "parcel_leakage_overlap": 0,
   "backbone": "mobilenet_v3_small",
   "feature_dim": 576,
-  "trained_timestamp": "2026-10-16 22:45:24"
+  "validation_split_strategy": "grouped-train-validation-test-v1",
+  "trained_timestamp": "2026-10-17 19:30:24",
+  "test_crop_accuracy_pct": 89.88,
+  "test_stage_accuracy_pct": 80.44,
+  "per_class_test_support": {
+    "Rice (Paddy)": 436.0,
+    "Coconut": 93.0,
+    "Maize": 21.0,
+    "Sugarcane": 21.0,
+    "Banana": 17.0,
+    "Sorghum": 2.0,
+    "Cassava": 0.0,
+    "Marigold": 0.0,
+    "Cotton": 2.0,
+    "Groundnut": 0.0,
+    "Mango": 1.0
+  },
+  "evaluation_scope": "Supplied labels and claimed parcel groups; not an independent real-field trial, legal verification or disease validation. Rare-class metrics may have few or zero test examples.",
+  "per_stage_test_support": {
+    "vegetation": 397.0,
+    "full_growth": 177.0,
+    "sown": 12.0,
+    "harvesting": 6.0,
+    "flowering": 1.0
+  }
 }

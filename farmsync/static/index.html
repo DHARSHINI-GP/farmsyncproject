@@ -4,52 +4,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FARMSYNC | Enterprise Geospatial AI Platform</title>
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Leaflet CSS & JS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Marked for Markdown Rendering in AI responses -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
-  
-  <!-- Google Fonts: Plus Jakarta Sans -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            brand: {
-              50: '#F0F9F4',
-              100: '#DCF2E4',
-              500: '#27AE60',
-              600: '#1E8E4D',
-              700: '#166E3A',
-              800: '#11522B',
-              900: '#0B381C',
-            },
-            navy: {
-              800: '#1E293B',
-              900: '#0F172A',
-            }
-          }
-        }
-      }
-    }
-  </script>
+  <!-- Tailwind CSS CDN -->
+  <link rel="stylesheet" href="/static/vendor/app.css">
+  <!-- Lucide Icons -->
+  <script src="/static/vendor/lucide.js"></script>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="/static/vendor/leaflet.css" />
+  <script src="/static/vendor/leaflet.js"></script>
+  <!-- Marked for Markdown Rendering in AI responses -->
+  <script src="/static/vendor/marked.umd.js"></script>
+  <script src="/static/vendor/purify.min.js"></script>
+
+  <!-- Google Fonts: Plus Jakarta Sans -->
+
+
 
   <style>
+    @media (max-width:1350px) { header nav {display:none !important;} }
+    @media (max-width:600px) {
+      header {height:auto !important;min-height:64px;flex-wrap:wrap;padding:10px !important;gap:8px;}
+      header > div:last-child {gap:8px;}
+      #bedrockStatusBtn {max-width:190px;}
+    }
     body {
       font-family: 'Plus Jakarta Sans', sans-serif;
       background-color: #EBF0F5;
@@ -94,7 +71,7 @@
 
   <!-- Main Enterprise Application Shell -->
   <div class="w-full max-w-[1760px] h-[95vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-slate-200/80">
-    
+
     <!-- TOP NAVIGATION BAR -->
     <header class="h-16 border-b border-slate-100 px-6 flex items-center justify-between bg-white z-20 shrink-0">
       <div class="flex items-center space-x-8">
@@ -123,7 +100,7 @@
         <!-- Live AI / Bedrock Status Pill (Clickable for Credentials Setup) -->
         <button onclick="openAwsModal()" id="bedrockStatusBtn" class="flex items-center space-x-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-200 text-xs font-medium transition">
           <span id="bedrockStatusDot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span id="bedrockStatusText">AI Model: Enterprise CoT (Online)</span>
+          <span id="bedrockStatusText">AI service status pending</span>
           <span class="text-slate-400">·</span>
           <span class="font-semibold text-emerald-900">ap-south-1</span>
           <i data-lucide="settings" class="w-3 h-3 text-emerald-600"></i>
@@ -143,6 +120,7 @@
           <span class="absolute top-2 right-2 w-2 h-2 bg-brand-500 rounded-full"></span>
         </button>
 
+        <button onclick="openWorkspace()" class="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Workspace</button>
         <!-- Profile Avatar & Team -->
         <div class="flex items-center space-x-2.5 pl-2 border-l border-slate-200">
           <div class="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-xs ring-2 ring-brand-500/30">
@@ -161,7 +139,7 @@
 
       <!-- LEFT SIDEBAR: MASTER CONTROLS & PARCEL TABLE -->
       <aside class="w-full h-[35vh] md:h-auto md:w-[460px] lg:w-[480px] border-r border-slate-200/80 bg-white flex flex-col shrink-0 z-10">
-        
+
         <!-- Sidebar Top Header & Primary Action -->
         <div class="p-4 border-b border-slate-100">
           <div class="flex items-center justify-between mb-3">
@@ -202,7 +180,7 @@
                 <input type="checkbox" id="simEscalate" class="rounded text-brand-600 focus:ring-brand-500">
                 <span class="text-slate-700 text-[11px]">Simulate Low-Confidence Photo (Teacher Escalation)</span>
               </label>
-              <label class="flex items-center space-x-2 cursor-pointer">
+                <label class="simulation-control flex items-center space-x-2 cursor-pointer">
                 <input type="checkbox" id="simConflict" class="rounded text-brand-600 focus:ring-brand-500">
                 <span class="text-slate-700 text-[11px]">Inject Legal Extent Discrepancy (Refuse-to-Invent)</span>
               </label>
@@ -240,21 +218,21 @@
 
       <!-- RIGHT PANEL: FULL MAP CANVAS & AI COPILOT HUD -->
       <main class="flex-1 min-h-[750px] md:min-h-0 relative flex flex-col bg-slate-100 overflow-hidden">
-        
+
         <!-- The Interactive Leaflet Map Container -->
         <div id="map" class="w-full h-full z-0"></div>
 
         <!-- PROMINENT AI PROMPT BAR & COPILOT (Matches Reference Image 3) -->
         <div class="absolute top-4 left-3 md:left-20 right-3 md:right-4 z-10 max-w-4xl mx-auto flex flex-col space-y-2 pointer-events-none">
-          
+
           <!-- AI Input Box -->
           <div class="glass-card p-2 rounded-2xl shadow-xl border border-white/80 pointer-events-auto flex items-center space-x-2">
             <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white shrink-0 shadow-sm">
               <i data-lucide="sparkles" class="w-4 h-4"></i>
             </div>
-            <input 
-              type="text" 
-              id="aiQueryInput" 
+            <input
+              type="text"
+              id="aiQueryInput"
               onkeydown="if(event.key==='Enter') executeAiQuery()"
               placeholder="Ask FARMSYNC AI (e.g. 'Inspect survey 384 and check crop and growth stage', 'Check waterbody clearance')..."
               class="flex-1 min-w-0 bg-transparent border-0 px-2 text-xs md:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
@@ -265,6 +243,7 @@
             </button>
           </div>
 
+          <button id="cancelAnalysisBtn" onclick="cancelActiveAnalysis()" class="hidden pointer-events-auto self-end rounded-lg bg-white text-rose-700 px-3 py-1 text-xs">Cancel analysis</button>
           <!-- Document Selector & Quick Prompts Row -->
           <div class="flex items-center space-x-2 pointer-events-auto overflow-x-auto no-scrollbar">
             <!-- Document Picker Pill -->
@@ -362,7 +341,7 @@
 
         <!-- FLOATING SLIDE-OVER INSPECTION DRAWER (Bottom Right) -->
         <div id="detailDrawer" class="absolute bottom-4 right-3 md:right-4 w-[calc(100%-24px)] md:w-[430px] max-h-[60vh] md:max-h-[calc(100%_-_144px)] glass-card rounded-3xl shadow-2xl border border-white/80 flex flex-col overflow-hidden z-20 transition-all duration-300">
-          
+
           <!-- Drawer Header -->
           <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between bg-white/70">
             <div class="flex items-center space-x-2.5">
@@ -374,7 +353,7 @@
                 <span id="drawerSubtitle" class="text-[10px] text-slate-400">Loading parcel geometry</span>
               </div>
             </div>
-            
+
             <div class="flex items-center space-x-2">
               <span id="drawerDecisionBadge" class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-100 text-slate-700">NOT AUDITED</span>
               <button onclick="toggleDrawer()" class="w-7 h-7 rounded-lg hover:bg-slate-200/50 flex items-center justify-center text-slate-400 hover:text-slate-700 transition">
@@ -385,7 +364,7 @@
 
           <!-- Drawer Body Content -->
           <div id="drawerBody" class="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar text-xs">
-            
+
             <!-- AI Copilot Live Response Box (Highlights dynamic AI generation) -->
             <div id="aiResponseBox" class="bg-gradient-to-br from-brand-50/80 to-emerald-50/50 border border-brand-200/70 rounded-2xl p-3.5 space-y-2">
               <div class="flex items-center justify-between">
@@ -395,7 +374,7 @@
                 </span>
                 <span id="aiLatencyBadge" class="bg-brand-100 text-brand-800 font-mono text-[10px] px-2 py-0.5 rounded-md">Not run</span>
               </div>
-              
+
               <!-- Markdown Content from AI Engine -->
               <div id="aiAnswerContent" class="text-[11px] text-slate-800 leading-relaxed prose prose-xs max-w-none pt-1">
                 Click <b>Run Verification</b> or enter any query in the prompt bar above to trigger the live Multimodal AI Reasoning Model.
@@ -429,7 +408,7 @@
                   <span class="text-[9px] text-slate-400">Refuse-to-Substitute: Zero fake image placeholders</span>
                 </div>
                 <div id="photoGpsBadge" class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-xs text-white px-2 py-0.5 rounded text-[10px] font-mono">
-                  GPS: Ground Truth Point
+                  Photo coordinates (source claim)
                 </div>
               </div>
             </div>
@@ -538,10 +517,10 @@
                 <span id="advisoryTitle">Agronomic Package of Practices</span>
               </div>
               <p id="advisoryBody" class="text-emerald-950 text-[11px] leading-relaxed">
-                Apply balanced NPK fertilizer and schedule drip irrigation as per Tamil Nadu Agricultural University guidelines.
+                Run verification to retrieve guidance supported by the supplied corpus.
               </p>
               <div class="text-[10px] text-emerald-800/80 font-medium italic pt-1 border-t border-emerald-200/50">
-                Source: <span id="advisoryCitation">TNAU Agritech Portal / ICAR Bulletin</span>
+                Source: <span id="advisoryCitation">Not retrieved</span>
               </div>
             </div>
 
@@ -620,6 +599,12 @@
     window.fetch = async (input, options = {}) => {
       const url = new URL(typeof input === 'string' ? input : input.url, location.href);
       if (url.origin === location.origin && url.pathname.startsWith('/api/')) {
+        const prefix = document.querySelector('meta[name="api-base"]')?.content || '';
+        if (prefix) input = prefix + url.pathname + url.search;
+        if (options.body instanceof FormData && ['/api/images/upload', '/api/documents/upload'].includes(url.pathname)) {
+          const mode = await (await nativeFetch(prefix + '/api/auth/status')).json();
+          if (mode.cloud_deployment) return uploadCloudEvidence(url.pathname.includes('images') ? 'image' : 'pdf', options.body);
+        }
         const headers = new Headers(options.headers);
         const key = localStorage.getItem('farmsync_api_key');
         if (key) headers.set('X-API-Key', key);
@@ -628,6 +613,7 @@
       const response = await nativeFetch(input, options);
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
+        if (response.status === 401 && url.pathname !== '/api/auth/login' && typeof openWorkspace === 'function') openWorkspace();
         throw new Error(typeof body.detail === 'string' ? body.detail : `Request failed (${response.status})`);
       }
       return response;
@@ -761,7 +747,7 @@
           document.getElementById('totalCount').innerText = allParcelsList.length;
           document.getElementById('flaggedCount').innerText = allParcelsList.filter(p => p.badge === 'error' || p.badge === 'warning').length;
           document.getElementById('loadedParcelsCountBadge').innerText = `${allParcelsList.length} Live`;
-          
+
           // Render Left Table
           renderParcelTable(allParcelsList);
 
@@ -809,7 +795,7 @@
         style: getParcelStyle,
         onEachFeature: (feature, layer) => {
           const p = feature.properties;
-          
+
           // Hover Tooltip
           layer.bindTooltip(`
             <div style="font-weight:700;color:#10B981;">Survey ${p.survey_no}</div>
@@ -852,8 +838,8 @@
         row.className = `p-3 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition ${isSelected ? 'bg-brand-50/70 border-l-4 border-brand-600' : ''}`;
         row.onclick = () => selectParcel(p.survey_no, true, p.parcel_id);
 
-        const badgeColor = p.badge === 'error' ? 'bg-rose-100 text-rose-800' : 
-                          (p.badge === 'warning' ? 'bg-amber-100 text-amber-800' : 
+        const badgeColor = p.badge === 'error' ? 'bg-rose-100 text-rose-800' :
+                          (p.badge === 'warning' ? 'bg-amber-100 text-amber-800' :
                           (p.badge === 'neutral' || p.status === 'Not verified' || p.status === 'Unknown' ? 'bg-slate-100 text-slate-700' : 'bg-emerald-100 text-emerald-800'));
 
         row.innerHTML = `
@@ -885,7 +871,7 @@
       currentParcelId = parcelId;
       resetAuditDisplay();
       document.getElementById('activeSurveyBadge').innerText = `Survey ${surveyNo}`;
-      
+
       // Re-style map layer to highlight newly selected parcel
       if (allParcelsGeoJsonLayer) {
         allParcelsGeoJsonLayer.setStyle(getParcelStyle);
@@ -1080,12 +1066,7 @@
         simulate_conflict: document.getElementById('simConflict').checked
       };
 
-      fetch('/api/ai/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-      .then(r => r.json())
+      submitAnalysis(payload)
       .then(res => {
         if (requestId !== auditRequestId) return;
         submitBtn.innerHTML = `<span>Ask AI</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`;
@@ -1111,7 +1092,7 @@
         document.getElementById('drawerSubtitle').textContent = `${res.extracted_attributes.gis_area_acres ?? 'Unresolved'} Acres · ${res.verified_result_object.village}`;
         document.getElementById('reverseAddressText').textContent = `Survey ${res.target_survey_no || 'Unspecified'} · ${res.verified_result_object.village} (dataset)`;
         document.getElementById('locServiceSourceBadge').textContent = 'LOCAL GIS · DATASET';
-        document.getElementById('geofenceStatusText').textContent = res.spatial_verification.waterbody_buffer_50m_compliant ? 'COMPLIANT (GIS)' : 'NOT VERIFIED / CONFLICT';
+        document.getElementById('geofenceStatusText').textContent = res.spatial_verification.waterbody_buffer_compliant ? `BUFFER CLEAR (${res.spatial_verification.waterbody_buffer_threshold_meters} m)` : 'NOT VERIFIED / BUFFER CONFLICT';
         document.getElementById('gisAreaText').textContent = res.extracted_attributes.gis_area_acres == null ? 'Not resolved' : `${res.extracted_attributes.gis_area_acres} Acres`;
         const spatial = res.spatial_verification || {};
         document.getElementById('roadDistText').textContent = spatial.distance_to_road_meters == null ? 'Not resolved' : `${spatial.distance_to_road_meters} m`;
@@ -1160,7 +1141,7 @@
             fnElem.innerText = doc.document_name || "Auto-Detected";
             fnElem.title = doc.relative_path || doc.document_name || "";
           }
-          
+
           const ownElem = document.getElementById('docOwnerText');
           const stgElem = document.getElementById('docStageText');
           const extElem = document.getElementById('docClaimedExtentText');
@@ -1169,11 +1150,11 @@
           const varElem = document.getElementById('docVarianceText');
 
           if (doc.found) {
-            if (ownElem) ownElem.innerText = doc.claimed_owner || "Verified Landholder";
+            if (ownElem) ownElem.innerText = doc.claimed_owner || "Owner not extracted";
             if (stgElem) stgElem.innerText = doc.gazette_section || "Land Acquisition Notice";
-            if (extElem) extElem.innerText = `${doc.claimed_extent_acres} ac (${doc.claimed_extent_hectares ? doc.claimed_extent_hectares + " ha" : "table"})`;
-            if (docArea) docArea.innerText = `${doc.claimed_extent_acres} Acres`;
-            
+            if (extElem) extElem.innerText = doc.claimed_extent_acres == null ? 'Extent missing or unit ambiguous' : `${doc.claimed_extent_acres} ac (source claim)`;
+            if (docArea) docArea.innerText = doc.claimed_extent_acres == null ? 'Not extracted' : `${doc.claimed_extent_acres} Acres`;
+
             if (badge) {
               badge.innerText = doc.source_method || "PDF TABLE";
               badge.className = "text-[9px] bg-emerald-100 text-emerald-900 font-mono px-2 py-0.5 rounded font-bold";
@@ -1182,6 +1163,9 @@
               if (doc.verification_status === "MATCH") {
                 varElem.innerText = `${doc.variance_pct}% (MATCH)`;
                 varElem.className = "text-emerald-600 font-bold";
+              } else if (doc.verification_status === 'UNRESOLVED') {
+                varElem.innerText = 'UNRESOLVED (missing extent or parcel identity)';
+                varElem.className = 'text-amber-700 font-bold';
               } else {
                 varElem.innerText = `${doc.variance_pct}% (DISCREPANCY)`;
                 varElem.className = "text-rose-600 font-bold";
@@ -1192,7 +1176,7 @@
             if (stgElem) stgElem.innerText = doc.gazette_section || "Notice Audit";
             if (extElem) extElem.innerText = "Not Recorded";
             if (docArea) docArea.innerText = "Not Recorded";
-            
+
             if (badge) {
               badge.innerText = "REFUSE_TO_INVENT";
               badge.className = "text-[9px] bg-rose-100 text-rose-900 font-mono px-2 py-0.5 rounded font-bold";
@@ -1271,7 +1255,7 @@
           const select = document.getElementById('docSelectDropdown');
           if (!select) return;
           select.innerHTML = '<option value="">Auto-Detect from Survey (71 Official PDFs)</option>';
-          
+
           for (const [category, files] of Object.entries(data.documents || {})) {
             const optGroup = document.createElement('optgroup');
             optGroup.label = category;
@@ -1287,15 +1271,18 @@
         .catch(err => console.warn("Failed loading documents list:", err));
     }
 
-    function loadAvailablePhotos() {
-      fetch('/api/images').then(response => response.json()).then(data => {
+    async function loadAvailablePhotos() {
+      return fetch('/api/images').then(response => response.json()).then(data => {
         const select = document.getElementById('photoSelectDropdown');
+        const previous = select.value;
+        while (select.options.length > 1) select.remove(1);
         for (const record of data.images || []) {
           const option = document.createElement('option');
           option.value = record.filename;
-          option.textContent = record.filename;
+          option.textContent = record.label || record.filename;
           select.appendChild(option);
         }
+        select.value = previous;
       }).catch(error => console.warn('Photo library unavailable:', error.message));
     }
 
@@ -1330,11 +1317,11 @@
       .then(data => {
         const select = document.getElementById('docSelectDropdown');
         const opt = document.createElement('option');
-        opt.value = data.filename;
+        opt.value = data.reference;
         opt.innerText = `[Uploaded] ${data.filename}`;
         select.prepend(opt);
-        select.value = data.filename;
-        
+        select.value = data.reference;
+
         submitBtn.innerHTML = `<span>Ask AI</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`;
         submitBtn.disabled = false;
         lucide.createIcons();
@@ -1424,7 +1411,7 @@
       document.getElementById('tabAll').className = type === 'all' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
       document.getElementById('tabFlagged').className = type === 'flagged' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
       document.getElementById('tabRedTeam').className = type === 'redteam' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
-      
+
       const drawer = document.getElementById('redTeamDrawer');
       if (type === 'redteam') {
         drawer.classList.remove('hidden');
@@ -1536,10 +1523,48 @@
           } else {
             btn.className = "flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-800 px-3.5 py-1.5 rounded-full border border-slate-300 text-xs font-medium transition";
             dot.className = "w-2 h-2 rounded-full bg-brand-500 animate-pulse";
-            text.innerText = `AI Reasoner (Active)`;
+            text.innerText = 'Local analysis · Bedrock disabled';
           }
         });
     }
   </script>
+
+  <div id="workspaceModal" class="hidden fixed inset-0 z-[100] bg-slate-900/50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 space-y-5">
+      <div class="flex items-center justify-between"><h2 class="font-bold text-xl">My workspace</h2><button onclick="closeWorkspace()" class="border rounded px-3 py-1">Close</button></div>
+      <div id="workspaceIdentity" class="text-sm text-slate-600"></div>
+      <p id="workspaceNotice" role="status" class="text-sm text-blue-800"></p>
+      <form id="workspaceLogin" onsubmit="signInWorkspace(event)" class="hidden space-y-3">
+        <label class="block">Username<input id="loginUsername" autocomplete="username" required class="block border rounded p-2 w-full"></label>
+        <label class="block">Password<input id="loginPassword" type="password" autocomplete="current-password" required class="block border rounded p-2 w-full"></label>
+        <button class="bg-emerald-700 text-white rounded px-4 py-2">Sign in</button>
+      </form>
+      <button id="workspaceLogout" onclick="signOutWorkspace()" class="hidden border rounded px-3 py-1">Sign out</button>
+      <div id="workspaceBody" class="space-y-5">
+        <form onsubmit="uploadFieldPhoto(event)" class="border rounded-xl p-4 space-y-3">
+          <h3 class="font-bold">Upload a field photo</h3>
+          <input id="fieldUploadFile" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required>
+          <div class="grid grid-cols-2 gap-3">
+            <label>Latitude (optional)<input id="photoLatitude" type="number" min="-90" max="90" step="any" class="border rounded p-2 w-full"></label>
+            <label>Longitude (optional)<input id="photoLongitude" type="number" min="-180" max="180" step="any" class="border rounded p-2 w-full"></label>
+          </div>
+          <p class="text-xs text-slate-600">Coordinates are supplied evidence, not proof of image authenticity. Without a verified parcel link, classification applies to the image only.</p>
+          <button class="bg-emerald-700 text-white rounded px-4 py-2">Upload and select photo</button>
+        </form>
+        <section class="border rounded-xl p-4 space-y-3">
+          <h3 class="font-bold">Compare all rows in an uploaded PDF</h3>
+          <p class="text-xs">Upload and select a PDF using the main document selector first. Ownership remains unverified.</p>
+          <label>Village for identity matching (optional)<input id="batchVillage" class="block border rounded p-2 w-full"></label>
+          <button onclick="runBatchDocument()" class="bg-blue-700 text-white rounded px-4 py-2">Run document comparison</button>
+        </section>
+        <section><h3 class="font-bold">Saved audits</h3><div id="workspaceRuns" class="max-h-56 overflow-auto"></div></section>
+        <section><h3 class="font-bold">Evidence review</h3><div id="workspaceReviews" class="max-h-56 overflow-auto"></div></section>
+        <div id="savedRunFiles" class="flex flex-wrap gap-2"></div>
+        <pre id="savedRunResult" class="bg-slate-50 rounded p-3 text-xs max-h-72 overflow-auto whitespace-pre-wrap"></pre>
+      </div>
+    </div>
+  </div>
+  <script src="/static/workspace.js"></script>
+
 </body>
 </html>

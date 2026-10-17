@@ -4,6 +4,9 @@ FAI_Product_Challange.zip
 
 # Environment & Credentials
 .env
+.env.*
+!.env.example
+!.env.production.example
 *.pem
 *.key
 credentials.json
@@ -38,6 +41,7 @@ wheels/
 *.egg
 
 # IDE & OS
+.github/
 .vscode/
 .idea/
 *.swp
@@ -51,4 +55,11 @@ Thumbs.db
 scratch/
 Uploads/
 **/Uploads/
+.runtime/
+.venv/
+node_modules/
+backups/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 

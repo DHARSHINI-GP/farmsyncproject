@@ -1,3 +1,7 @@
+> **Earlier checkpoint.** Later fixes and AWS-only deployment work are documented
+> in [MANUAL_ACCEPTANCE.md](MANUAL_ACCEPTANCE.md) and [AWS_DEPLOYMENT.md](AWS_DEPLOYMENT.md).
+> Earlier passing AWS checks are historical, not a current connection guarantee.
+
 # AWS integration verification — 17 October 2026
 
 > **Location verified — 17 October 2026:** Dedicated Builder-Location credentials pass STS. Existing FARMSYNC_PlaceIndex and FARMSYNC_RouteCalculator work for live reverse geocoding and driving routes. Survey 384 returned 10.71 km, 22.1 min and 72 geometry points; the browser displayed the same result. Cloud Location is enabled locally. No resources were created. Cloud geofence collections are unused; buffer audits remain local GIS. Redacted result: `scratch/aws-location-check.json`.

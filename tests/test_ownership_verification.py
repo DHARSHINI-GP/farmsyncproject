@@ -186,13 +186,17 @@ def test_evidence_graph_builder_no_circular_assertion():
     assert "NO RECORD FOR SURVEY" in nodes["db_node"]["label"]
 
 
-def test_orchestrator_abstains_on_ownership_discrepancy(orchestrator):
+def test_orchestrator_abstains_on_ownership_discrepancy(orchestrator, monkeypatch):
     """
     Verifies that the orchestrator rejects/abstains when document ownership
     conflicts with the official Revenue Land Registry.
     """
     prompt = "Verify claim for Survey 384 in Keelathattaparai village with conflicting claimant"
 
+    monkeypatch.setattr(orchestrator.docs, "extract_document_claims", lambda **kwargs: {
+        "found": True, "survey_no": "384", "extracted_owner": "A different source claimant",
+        "claimed_extent_acres": 10.349, "document_source": "controlled-conflict.pdf"
+    })
     # Execute request with conflict simulation
     res = orchestrator.execute_request(
         query=prompt,
@@ -292,7 +296,7 @@ def test_evidence_graph_builder_records_demonstration_provenance():
     assert "Demonstration Data" in db_evidence["source_ref"]
 
 
-def test_demonstration_match_is_not_official_verification(extractor, orchestrator):
+def test_demonstration_match_is_not_official_verification(extractor, orchestrator, monkeypatch):
     """
     CRITICAL AUDIT VERIFICATION:
     Validates that:
@@ -317,6 +321,8 @@ def test_demonstration_match_is_not_official_verification(extractor, orchestrato
     assert res_ext["is_authoritative_government_record"] is False
     assert "Demo match—not official verification" in res_ext["details"]
 
+    # Controlled document evidence tests the join without invented parser fallbacks.
+    monkeypatch.setattr(orchestrator.docs, "extract_document_claims", lambda **kwargs: {"survey_no": "384", **doc_claims})
     # End-to-end orchestration check
     res_orch = orchestrator.execute_request("Identify Survey 384 in Keelathattaparai village and verify parcel ownership.")
     vobj = res_orch["verified_result_object"]

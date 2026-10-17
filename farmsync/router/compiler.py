@@ -169,7 +169,9 @@ class TaskGraph:
             "target_document": self.target_document,
             "subtasks": [n.to_dict() for n in ordered],
             "is_dynamic_dag": True,
-            "total_nodes": len(self.nodes)
+            "total_nodes": len(self.nodes),
+            "planner_source": getattr(self, "planner_source", "VALIDATED_DOMAIN_TEMPLATE"),
+            "planning_usage": getattr(self, "planning_usage", {})
         }
 
     # Dict-like compatibility interface
@@ -200,6 +202,18 @@ class TaskGraphCompiler:
     """
 
     # Pre-validated standard workflow templates for FarmwiseAI tasks
+    @staticmethod
+    def extract_buffer_distance(query):
+        match = re.search(r"(\d+(?:\.\d+)?)\s*(km|metres?|meters?|m)\s*(?:waterbody\s*)?buffer", query, re.I)
+        if not match:
+            match = re.search(r"buffer\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?)\s*(km|metres?|meters?|m)\b", query, re.I)
+        if not match:
+            return 50.0
+        value = float(match[1]) * (1000 if match[2].lower() == "km" else 1)
+        if not 0 < value <= 10000:
+            raise ValueError("Buffer must be greater than 0 and at most 10000 metres")
+        return value
+
     PARCEL_ADVISORY_SPECS = [
         {"id": "task_1", "name": "Extract Survey & Claims", "type": "DOCUMENT_OCR", "deps": [], "inputs": ["document_path", "survey_no"], "outputs": ["doc_claims"]},
         {"id": "task_2", "name": "Registry Cross-Check", "type": "DATABASE_JOIN", "deps": ["task_1"], "inputs": ["doc_claims"], "outputs": ["reg_check"]},
@@ -303,7 +317,7 @@ class TaskGraphCompiler:
 
         return "Keelathattaparai"
 
-    def compile(self, query: str) -> TaskGraph:
+    def compile(self, query: str, plan=None) -> TaskGraph:
         """
         Compiles user query into a typed executable TaskGraph DAG.
         Extracts key entities (survey number, village, document name, intent) without fabrication.
@@ -337,6 +351,28 @@ class TaskGraphCompiler:
             target_village=village,
             target_document=target_doc
         )
+
+        if plan and not plan.get("fallback"):
+            from farmsync.router.planner import CAPABILITIES, validate_tasks
+            selected = validate_tasks({"tasks": plan["tasks"]})
+            if set(selected) <= {"spatial", "trust"}:
+                graph.workflow_type = "ENVIRONMENTAL_BUFFER_AUDIT"
+            specs = []
+            for key in selected:
+                deps = []
+                if key == "registry":
+                    deps = ["document"]
+                elif key == "spatial":
+                    deps = [t for t in ("document", "registry") if t in selected]
+                elif key == "escalation":
+                    deps = ["vision"]
+                elif key == "advisory":
+                    deps = ["escalation"]
+                elif key == "trust":
+                    deps = [t for t in selected if t != "trust"]
+                specs.append({"id": key, "name": CAPABILITIES[key][1], "type": CAPABILITIES[key][0], "deps": deps})
+            graph.planner_source = plan["source"]
+            graph.planning_usage = plan.get("usage", {})
 
         for spec in specs:
             node = TaskNode(

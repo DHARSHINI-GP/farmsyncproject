@@ -1,3 +1,9 @@
+> **Historical audit snapshot; implementation has changed.** Source-field fabrication
+> has been replaced, and uploads/accounts/history/review/planning/operations work has
+> been added. Read [MANUAL_ACCEPTANCE.md](MANUAL_ACCEPTANCE.md) and
+> [AWS_DEPLOYMENT.md](AWS_DEPLOYMENT.md) for current functionality and release gates.
+> The findings below document the original issues, not the current test result.
+
 # FARMSYNC: promise coverage and production gaps
 
 Reviewed 17 October 2026. This assessment compares the current source with

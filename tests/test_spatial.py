@@ -14,6 +14,16 @@ def test_survey_parcels_indexed(engine):
     surveys = engine.list_surveys()
     assert len(surveys) > 0, "No surveys found!"
 
+@pytest.mark.parametrize('index',[0,150,395])
+def test_indexed_distances_equal_full_geometry_search(engine,index):
+    geometry=engine.gdf_parcels_utm.iloc[index].geometry
+    for frame in (engine.gdf_water_utm,engine.gdf_roads_utm,engine.gdf_substations_utm):
+        assert engine.nearest_distance(frame,geometry) == pytest.approx(float(frame.distance(geometry).min()),abs=1e-8)
+
+def test_empty_reference_layer_fails_explicitly(engine):
+    with pytest.raises(ValueError,match='empty'):
+        engine.nearest_distance(engine.gdf_water_utm.iloc[:0],engine.gdf_parcels_utm.iloc[0].geometry)
+
 def test_survey_384_geometry(engine):
     p = engine.get_parcel("384")
     assert p is not None, "Survey 384 not found!"

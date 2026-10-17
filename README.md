@@ -3,10 +3,13 @@
 Task 1 prototype for the FarmwiseAI Product Challenge: evidence-driven orchestration
 of crop photographs, land documents and deterministic geospatial analysis.
 
-**Current release status:** local workflows are testable; live AWS acceptance requires
-a valid organizer-issued Builder session. See [HACKATHON_READINESS.md](HACKATHON_READINESS.md)
-for the organizer requirements, current implementation and remaining gates. Historical
-proposals and generated slides are not proof of deployed or tested cloud capability.
+**Current release status:** the local application includes source-only document
+extraction, real photo uploads, individual accounts, persisted jobs/history,
+progress and human review. Organizer-only AWS adapters and Linux artifacts are
+being validated separately; a prepared package is not a verified deployment.
+See [MANUAL_ACCEPTANCE.md](MANUAL_ACCEPTANCE.md) for every user-facing function
+and [AWS_DEPLOYMENT.md](AWS_DEPLOYMENT.md) for the cloud release gates.
+Ownership remains explicitly unverified, using only the supplied datasets.
 
 ## Features
 
@@ -21,7 +24,10 @@ proposals and generated slides are not proof of deployed or tested cloud capabil
   parcel evidence; explicitly selected unlocated photos are analyzed separately.
 - Agronomy retrieval from the bundled ten-entry corpus with optional Titan Text
   Embeddings V2; local retrieval is available without AWS.
-- Predefined workflow DAGs, evidence provenance, trust breakdown and actual-tool traces.
+- Validated workflow DAGs and optional approved Bedrock domain planning, evidence
+  provenance, heuristic trust breakdown, persisted progress and actual-tool traces.
+- Owner-scoped uploads, passwords/sessions, saved audit versions and reviewer decisions.
+- Multi-row document comparison, missing-field abstention and content-hash provenance.
 - Local route estimates; Amazon Location is an optional extension requiring additional
   organizer permission and is disabled by default.
 
@@ -39,8 +45,9 @@ Task 1 uses Mumbai (`ap-south-1`) and these models:
 | Multimodal embedding access check | `amazon.titan-embed-image-v1` |
 
 The shared core services are S3, Lambda, API Gateway, DynamoDB and CloudWatch Logs.
-Their availability does not mean every service must be used. This repository does
-not currently implement a deployed Lambda/API Gateway stack or S3/DynamoDB persistence.
+The AWS deployment adapter uses these services; successful live deployment must
+be demonstrated independently of local tests. The S3/DynamoDB persistence and
+Lambda/API Gateway adapters are implemented; live release acceptance is separate.
 Use the assigned `fai-tce-team26-*` resource prefix and existing execution role when
 deploying; do not create IAM roles or use another region to work around access denial.
 

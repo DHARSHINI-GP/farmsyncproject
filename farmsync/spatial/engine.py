@@ -63,6 +63,16 @@ class SpatialEngine:
         return sorted(list(self.gdf_parcels_wgs84["survey_no_clean"].dropna().unique()))
 
     @staticmethod
+    def nearest_distance(frame, geometry):
+        """Exact planar distance using the cached STRtree, in the frame's UTM CRS."""
+        if frame.empty:
+            raise ValueError('Required GIS reference layer is empty')
+        _, distances = frame.sindex.nearest(geometry, return_all=False, return_distance=True)
+        if not len(distances):
+            raise ValueError('No usable geometry in GIS reference layer')
+        return float(distances.min())
+
+    @staticmethod
     def feature_id(row):
         identity = {key: str(row.get(key, "")) for key in ("dist_name", "taluk_name", "vil_name", "unit_id", "block_id", "survey_no")}
         identity["geometry"] = mapping(row.geometry)
@@ -240,9 +250,9 @@ class SpatialEngine:
         containment_valid = bool(geom_valid and self.cadastral_hull_utm.contains(geom.centroid))
 
         # Calculate minimum metric distances using projected UTM geometry (EPSG:32644)
-        min_dist_water = float(self.gdf_water_utm.distance(geom).min())
-        min_dist_road = float(self.gdf_roads_utm.distance(geom).min())
-        min_dist_substation = float(self.gdf_substations_utm.distance(geom).min())
+        min_dist_water = self.nearest_distance(self.gdf_water_utm, geom)
+        min_dist_road = self.nearest_distance(self.gdf_roads_utm, geom)
+        min_dist_substation = self.nearest_distance(self.gdf_substations_utm, geom)
 
         # Buffer checks (50m default waterbody buffer as specified in Proposal Section 4.2 & 7.2)
         waterbody_conflict = min_dist_water < water_buffer_meters
@@ -257,7 +267,8 @@ class SpatialEngine:
             "distance_to_substation_meters": round(min_dist_substation, 2),
             "waterbody_buffer_threshold_meters": water_buffer_meters,
             "waterbody_buffer_conflict": waterbody_conflict,
-            "waterbody_buffer_50m_compliant": not waterbody_conflict,
+            "waterbody_buffer_50m_compliant": min_dist_water >= 50.0,
+            "waterbody_buffer_compliant": not waterbody_conflict,
             "road_accessible": road_accessible,
             "cadastral_containment_valid": containment_valid,
             "geometry_valid": geom_valid,

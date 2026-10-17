@@ -1,0 +1,10 @@
+{
+  "name": "farmsync-ui",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.cjs -i frontend.css -o farmsync/static/vendor/app.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

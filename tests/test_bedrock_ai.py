@@ -151,3 +151,23 @@ class TestSpatialAttributionHonesty:
         thought_process_text = " ".join(res["thought_process"])
         assert "PostGIS" not in thought_process_text
         assert "GeoPandas/Shapely" in thought_process_text
+
+
+def test_missing_document_extent_does_not_become_a_discrepancy(ai_engine_no_aws,monkeypatch):
+    monkeypatch.setattr(ai_engine_no_aws.orchestrator.docs,'extract_document_claims',lambda **_: {
+        'found':True,'document_source':'partial.pdf','survey_no':'384',
+        'extracted_owner':'Actual Source Name','claimed_extent_acres':None,
+        'status':'PARTIAL_SOURCE_EVIDENCE','page_number':2})
+    result=ai_engine_no_aws.process_query('Analyze Survey 384')
+    assert result['document_verification']['verification_status']=='UNRESOLVED'
+    assert result['document_verification']['page_count'] is None
+    assert 'Document Comparison Unresolved' in result['answer']
+
+
+def test_custom_buffer_answer_reports_the_executed_spatial_rule(ai_engine_no_aws):
+    result=ai_engine_no_aws.process_query('Check a 100 m waterbody buffer for Survey 384')
+    assert result['spatial_verification']['waterbody_buffer_threshold_meters']==100
+    assert result['answer'].startswith('### Spatial Audit:')
+    assert '**100 m**' in result['answer']
+    assert str(result['spatial_verification']['distance_to_waterbody_meters']) in result['answer']
+    assert 'does not establish legal clearance' in result['answer']

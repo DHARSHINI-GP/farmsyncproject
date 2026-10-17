@@ -10,7 +10,7 @@ absent or invalid, every response is honestly labelled as a LOCAL estimate
 
 import os
 import math
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, TYPE_CHECKING
 
 try:
     import boto3
@@ -20,7 +20,8 @@ try:
 except ImportError:
     BOTO3_AVAILABLE = False
 
-from farmsync.spatial.engine import SpatialEngine
+if TYPE_CHECKING:
+    from farmsync.spatial.engine import SpatialEngine
 from farmsync.aws import create_client, validate_region
 
 
@@ -40,7 +41,9 @@ class AmazonLocationServiceEngine:
       (GeoPandas / Shapely / UTM 44N) and labels its output accordingly.
     """
 
-    def __init__(self, spatial_engine: Optional[SpatialEngine] = None):
+    def __init__(self, spatial_engine: Optional['SpatialEngine'] = None):
+        if spatial_engine is None:
+            from farmsync.spatial.engine import SpatialEngine
         self.spatial = spatial_engine or SpatialEngine()
         self.region = os.environ.get("AWS_DEFAULT_REGION", "ap-south-1")
         self.place_index = os.environ.get(
@@ -183,7 +186,8 @@ class AmazonLocationServiceEngine:
                         "country": place.get("Country", "IND"),
                         "source": "Amazon Location Service (search_place_index_for_position)",
                         "aws_credentials_available": True,
-                        "confidence": 0.98,
+                        "confidence": None,
+                        "confidence_kind": "Provider did not return a calibrated confidence probability",
                     }
             except Exception as exc:
                 code = exc.response.get("Error", {}).get("Code") if isinstance(exc, ClientError) else type(exc).__name__
@@ -372,6 +376,10 @@ class AmazonLocationServiceEngine:
         geofence APIs.  The ``service_provider`` field honestly reflects this.
         """
         constraints = self.spatial.check_constraints(survey_no)
+        if not constraints.get('deterministic_spatial_verified', False):
+            return {'survey_no':survey_no,'geofence_status':'UNVERIFIED','environmental_clearance':False,
+                    'service_provider':'GeoPandas_Shapely_UTM44N (local SpatialEngine)',
+                    'error':constraints.get('error','Spatial reference evidence unavailable')}
         is_conflict = constraints.get("waterbody_buffer_conflict", False)
         dist_w = constraints.get("distance_to_waterbody_meters")
 
@@ -394,7 +402,7 @@ class AmazonLocationServiceEngine:
                 "Location Service geofence APIs."
             ),
             "audit_verdict": (
-                "Within legal agricultural boundary"
+                "No conflict with the configured dataset buffer"
                 if not is_conflict
                 else "Infringes on 50 m waterbody buffer zone"
             ),

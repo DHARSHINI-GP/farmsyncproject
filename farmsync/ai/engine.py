@@ -254,7 +254,9 @@ class AIAssistantEngine:
         force_escalate: bool = False,
         simulate_conflict: bool = False,
         parcel_id: Optional[str] = None,
-        image_filename: Optional[str] = None
+        image_filename: Optional[str] = None,
+        event_callback=None,
+        cancel_check=None
     ) -> Dict[str, Any]:
         """
         Executes end-to-end AI reasoning over the query:
@@ -280,7 +282,9 @@ class AIAssistantEngine:
             simulate_conflict=simulate_conflict,
             simulate_unsupported_crop=False,
             parcel_id=parcel_id,
-            image_filename=image_filename
+            image_filename=image_filename,
+            event_callback=event_callback,
+            cancel_check=cancel_check
         )
 
         vobj = orch_res["verified_result_object"]
@@ -292,16 +296,16 @@ class AIAssistantEngine:
         doc_src = attrs.get("document_source")
         doc_found = bool(attrs.get("document_found", False))
         doc_evidence = next((e for e in vobj.get("source_evidence", []) if e.get("source_type") == "DOCUMENT_OCR"), {})
-        page_num = doc_evidence.get("page_number", 1)
+        page_num = doc_evidence.get("page_number")
 
         doc = {
             "found": doc_found,
             "document_name": doc_src or "Official Gazette Notice",
             "page_number": page_num,
-            "page_count": 1,
+            "page_count": None,
             "claimed_extent_acres": attrs.get("documented_area_acres"),
             "claimed_owner": attrs.get("document_owner") or "Not extracted (demo registry is not document evidence)",
-            "verification_status": "MATCH" if (doc_found and attrs.get("extent_difference_pct") is not None and attrs.get("extent_difference_pct") <= 5.0) else ("ABSENT" if not doc_found else "MISMATCH")
+            "verification_status": ('ABSENT' if not doc_found else 'UNRESOLVED' if attrs.get('extent_difference_pct') is None else 'MATCH' if attrs['extent_difference_pct'] <= 5.0 else 'MISMATCH')
         }
         doc["variance_pct"] = attrs.get("extent_difference_pct")
         routing = vobj["routing_telemetry"]
@@ -325,7 +329,7 @@ class AIAssistantEngine:
             f"3. Document Verification: Legal document claimed {doc['claimed_extent_acres']} ac for '{doc['claimed_owner']}'. Registry verification status: {doc['verification_status']}.",
             f"4. Multimodal Vision: {vision_trace}",
             f"5. Agronomy Retrieval: Indexed TNAU/ICAR agronomic package for {attrs.get('predicted_crop')}. Retrieved protocol from '{adv.get('citation_source')}'.",
-            f"6. FTS Trust Synthesis: Synthesized 5 independent signals into FarmwiseAI Trust Score = {trust.get('task_trust_score_fts', 0.884)}/1.0. Verification Decision: {trust.get('verification_status')}."
+            f"6. FTS Trust Synthesis: Synthesized 5 independent signals into FarmwiseAI Trust Score = {trust.get('task_trust_score_fts', 0.0)}/1.0. Verification Decision: {trust.get('verification_status')}."
         ]
 
         # Step 4: Generate Executive Audit Answer
@@ -339,6 +343,8 @@ class AIAssistantEngine:
         report_focus = "general"
 
         if self.bedrock_client:
+            if cancel_check:
+                cancel_check()
             system_prompt = (
                 'Classify the requested audit focus. Return only one JSON object with '
                 'a single key "focus" whose value is "spatial", "documents", "crop", '
@@ -380,7 +386,8 @@ class AIAssistantEngine:
             attrs=attrs,
             adv=adv,
             trust=trust,
-            report_focus=report_focus
+            report_focus=report_focus,
+            workflow_type=orch_res.get('executed_dag', {}).get('workflow_type')
         )
 
         latency_ms = int((time.time() - start_time) * 1000)
@@ -423,7 +430,8 @@ class AIAssistantEngine:
         attrs: Dict[str, Any],
         adv: Dict[str, Any],
         trust: Dict[str, Any],
-        report_focus: str = "general"
+        report_focus: str = "general",
+        workflow_type: str | None = None
     ) -> str:
         """Synthesizes structured enterprise response grounded in verified domain facts."""
         status_label = trust["verification_status"].replace("VERIFIED_", "")
@@ -447,6 +455,13 @@ class AIAssistantEngine:
                 f"No document claim was extracted for this survey. Ownership and documented extent remain unverified. "
                 f"The workflow decision is `{trust.get('verification_status')}`; a geometry-only result does not confirm ownership."
             )
+        elif doc['verification_status'] == 'UNRESOLVED':
+            paragraphs.append(
+                f"### Executive Summary: Document Comparison Unresolved\n"
+                f"A source claim was extracted for Survey **{survey_no}** from `{doc_name}`, "
+                "but a declared document extent or an unambiguous GIS parcel is missing. "
+                "An extent match or mismatch cannot be established. Ownership remains unverified."
+            )
         elif not is_conflict:
             paragraphs.append(
                 f"### Executive Summary: Document Extent Within Tolerance\n"
@@ -462,13 +477,13 @@ class AIAssistantEngine:
                 f"Survey Number **{survey_no}** in {attrs.get('village', 'the study area')} exhibits an evidence conflict. "
                 f"GIS computed extent is **{gis_area} Acres** versus documented claim of **{claimed_extent} Acres** in `{doc_name}` "
                 f"({'Boundary Extent Mismatch' if doc['verification_status'] != 'MATCH' else 'Waterbody Buffer Conflict'}). "
-                f"The request has been routed for regulatory audit under the *Refuse-to-Invent* protocol."
+                f"The result requires human evidence review under the *Refuse-to-Invent* policy."
             )
 
         # Section 2: Multimodal Perception & Agronomy
         crop_name = attrs.get("predicted_crop", "Field Crop")
         stage = attrs.get("growth_stage", "full_growth")
-        v_conf = (trust.get("model_reported_confidence") or 0.0) * 100
+        v_conf = (attrs.get('image_prediction_confidence') or trust.get("model_reported_confidence") or 0.0) * 100
         if not crop_name or not stage:
             paragraphs.append(
                 "### Field Intelligence & Agronomic Guidance\n"
@@ -479,15 +494,31 @@ class AIAssistantEngine:
         else:
             paragraphs.append(
                 f"### Field Intelligence & Agronomic Guidance\n"
-            f"- **Observed Crop**: **{crop_name}** at **{stage}** stage (Vision Confidence: **{v_conf:.1f}%**).\n"
+            f"- **Model Crop Prediction**: **{crop_name}** at **{stage}** stage (model confidence signal: **{v_conf:.1f}%**, not a guarantee).\n"
             f"- **Photo Location Match**: {'Verified within selected polygon' if attrs.get('photo_association_verified') else 'Unverified — any crop guidance applies to the selected image only, not a confirmed parcel crop.'}\n"
             f"- **Agronomy Protocol**: {adv.get('fertilizer_schedule')}\n"
             f"- **Corpus Citation**: *{adv.get('citation_source')}* (not independently verified online)."
             )
 
+        if workflow_type == 'ENVIRONMENTAL_BUFFER_AUDIT':
+            threshold = gis.get('waterbody_buffer_threshold_meters')
+            distance = gis.get('distance_to_waterbody_meters')
+            valid = bool(gis.get('deterministic_spatial_verified') and gis.get('geometry_valid'))
+            verdict = ('CONFLICT' if gis.get('waterbody_buffer_conflict') else 'WITHIN CONFIGURED BUFFER RULE') if valid else 'UNRESOLVED'
+            threshold_text = f'{threshold:g}' if threshold is not None else 'unknown'
+            paragraphs = [
+                f"### Spatial Audit: {verdict}\n"
+                f"Survey **{survey_no}**, GIS area **{gis_area} acres**. "
+                f"Requested waterbody buffer: **{threshold_text} m**. "
+                f"Measured nearest waterbody clearance: **{distance if distance is not None else 'unknown'} m**. "
+                f"Road proximity: **{gis.get('distance_to_road_meters') if gis.get('distance_to_road_meters') is not None else 'unknown'} m**. "
+                "This verdict concerns the supplied GIS layers and configured distance rule only. "
+                "It does not establish legal clearance, ownership or a parcel crop."
+            ]
+
         # Section 3: Trust Metric & Decision
         fts_val = trust.get("task_trust_score_fts", 0.0)
-        v_stat = trust.get("verification_status", "VERIFIED_ACCEPT")
+        v_stat = trust.get("verification_status", "VERIFIED_ABSTAIN")
         paragraphs.append(
             f"### Trust & Governance Rating\n"
             f"Synthesized FarmwiseAI Trust Score: **{fts_val:.3f} / 1.000** "
@@ -501,6 +532,6 @@ class AIAssistantEngine:
             "litigation, satellite-imagery or water-rights database was checked. "
             "Document extent agreement does not establish legal ownership."
         )
-        if report_focus == "crop":
+        if report_focus == "crop" and workflow_type != 'ENVIRONMENTAL_BUFFER_AUDIT':
             paragraphs[0], paragraphs[1] = paragraphs[1], paragraphs[0]
         return "\n\n".join(paragraphs)

@@ -33,93 +33,23 @@ def test_benchmark_dataset_structure():
     assert counts["UNSUPPORTED_AND_ABSTAIN"] == 6
 
 
-def test_benchmark_results_json_empirical():
-    """Verifies that benchmark_results.json records measured empirical performance."""
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    results_path = os.path.join(base_dir, "data", "benchmark_results.json")
-    assert os.path.exists(results_path), f"Benchmark results file missing at {results_path}"
-
-    with open(results_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    assert data["total_queries"] == 50
-    summary = data["summary"]
-
-    fs = summary["FARMSYNC"]
-    prem = summary["Premium_Only"]
-    stat = summary["Static_Routing"]
-
-    # Spatial Hallucination guarantee: Zero spatial hallucinations via deterministic GeoPandas/Shapely GIS
-    assert fs["spatial_hallucination_rate_pct"] == 0.0
-    assert prem["spatial_hallucination_rate_pct"] > 0.0
-
-    # Cost reduction: >85% cost savings vs commercial VLM
-    assert fs["cost_savings_vs_premium_pct"] >= 85.0
-    assert fs["average_cost_usd"] < prem["average_cost_usd"]
-
-    # Latency reduction
-    assert fs["average_latency_ms"] < prem["average_latency_ms"]
-
-    # Category breakdown verification
-    breakdown = data["category_breakdown"]
-    assert "CONFIDENT_GROUNDED" in breakdown
-    assert "PERCEPTION_ESCALATION" in breakdown
-    assert "BUFFER_AND_ACCESS" in breakdown
-    assert "DOCUMENT_EXTENT_DISCREPANCY" in breakdown
-    assert "UNSUPPORTED_AND_ABSTAIN" in breakdown
+def test_historical_results_are_not_current_accuracy_evidence():
+    from pathlib import Path
+    data=json.loads(Path("data/benchmark_results.json").read_text(encoding="utf-8"))
+    assert data["status"] == "HISTORICAL_INVALID_AFTER_SOURCE_EVIDENCE_FIXES"
+    assert data["current_configuration_validated"] is False
 
 
-def test_orchestrator_baseline_comparison_not_mocked():
-    """
-    Verifies that orchestrator.py baseline comparison does NOT use mock constants or
-    derive accuracy directly from '100.0 if ACCEPT else ...'.
-    """
-    orch = FarmSyncOrchestrator()
-    res = orch.execute_request(
-        "Identify Survey Number 384 in Keelathattaparai village, verify parcel extent, predict crop and growth stage.",
-        survey_no="384"
-    )
-
-    baseline = res["baseline_comparison"]
-    assert "benchmark_suite" in baseline
-    assert baseline["total_benchmark_queries"] == 50
-
-    fs = baseline["FARMSYNC"]
-    prem = baseline["Premium_Only"]
-    stat = baseline["Static_Routing"]
-
-    # Live query cost/latency is measured dynamically
-    assert fs["cost_usd"] > 0.0
-    assert fs["latency_ms"] >= 0
-    assert fs["hallucination_rate_pct"] == 0.0
-    assert fs["cost_savings_vs_premium_pct"] > 0.0
-
-    # Measured benchmark accuracy is reported from the 50-query suite
-    assert fs["benchmark_measured_accuracy_pct"] == 100.0
-    assert prem["benchmark_measured_accuracy_pct"] > 0.0
-    assert stat["benchmark_measured_accuracy_pct"] > 0.0
-    assert fs["benchmark_measured_accuracy_pct"] > prem["benchmark_measured_accuracy_pct"]
-    assert fs["benchmark_measured_accuracy_pct"] > stat["benchmark_measured_accuracy_pct"]
-
-
-def test_orchestrator_baseline_on_abstain_query():
-    """
-    Verifies that even when a query abstains, baseline comparison reports measured benchmark
-    accuracy rather than mock 0% or hardcoded mock accuracy.
-    """
-    orch = FarmSyncOrchestrator()
-    res = orch.execute_request(
-        "Audit non-existent Survey 9999 in Keelathattaparai village.",
-        survey_no="9999"
-    )
-
-    vobj = res["verified_result_object"]
-    assert vobj["trust_metrics"]["verification_status"] == "VERIFIED_ABSTAIN"
-
-    # Baseline comparison must report empirical benchmark accuracy, not mock 0%
-    baseline = res["baseline_comparison"]
-    assert baseline["FARMSYNC"]["benchmark_measured_accuracy_pct"] >= 90.0
-    assert baseline["FARMSYNC"]["verified_accuracy_pct"] >= 90.0
+def test_current_metrics_do_not_fabricate_comparisons():
+    orch=FarmSyncOrchestrator()
+    result=orch.execute_request("Check waterbody buffer for Survey 384")
+    baseline=result["baseline_comparison"]
+    assert baseline["current_configuration_validated"] is False
+    assert baseline["FARMSYNC"]["latency_ms"] >= 0
+    assert baseline["FARMSYNC"]["verified_accuracy_pct"] is None
+    assert baseline["FARMSYNC"]["hallucination_rate_pct"] is None
+    assert baseline["FARMSYNC"]["cost_savings_vs_premium_pct"] is None
+    assert baseline["Premium_Only"]["evaluation_type"] == "NOT_EXECUTED"
 
 
 def test_competitor_baseline_runners_executed_query_by_query():

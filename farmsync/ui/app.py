@@ -257,7 +257,7 @@ with tab_map:
         st.markdown("---")
         st.markdown("**Deterministic Spatial & Proximity Audit:**")
         st.markdown(f"• Distance to Waterbody: **`{spatial_checks['distance_to_waterbody_meters']} m`**")
-        st.markdown(f"• Waterbody Buffer Conflict (<50m): **`{spatial_checks['waterbody_buffer_conflict']}`**")
+        st.markdown(f"• Waterbody Buffer Conflict (<{spatial_checks.get('waterbody_buffer_threshold_meters', 50)} m): **`{spatial_checks['waterbody_buffer_conflict']}`**")
         st.markdown(f"• Cadastral Containment Verified: **`{spatial_checks.get('cadastral_containment_valid', True)}`**")
         st.markdown(f"• Distance to Road Network: **`{spatial_checks['distance_to_road_meters']} m`**")
         st.markdown(f"• Direct Road Access: **`{spatial_checks['road_accessible']}`**")
@@ -383,103 +383,14 @@ with tab_telemetry:
     with col_tl:
         st.metric("Total Processing Latency", f"{telemetry['total_latency_ms']} ms")
 
-# Tab 5: Baseline Comparison
+# Tab 5: measured telemetry, without unsupported competitor accuracy claims.
 with tab_baselines:
-    st.subheader("Comparative Benchmarking: Live System vs Simulated Baselines")
-    st.info("ℹ️ **Notice on Baseline Simulation**: FARMSYNC execution is measured live query-by-query on actual local models and GIS tools. Competitor baselines (Premium-Only and Static Pipeline) are simulated architectural models based on token cost assumptions ($0.0125/query), synthetic latency offsets, and prompt-only spatial estimation without external API calls.")
-    
-    # 1. Live Query Comparison
-    st.markdown("#### Live Query Execution Telemetry")
-    b_data = [
-        {
-            "Architecture": "FARMSYNC (Adaptive Orchestration - Measured Live)",
-            "Cost ($)": f"${baselines['FARMSYNC']['cost_usd']:.5f}",
-            "Latency (ms)": f"{baselines['FARMSYNC']['latency_ms']} ms",
-            "Spatial Hallucinations": f"{baselines['FARMSYNC']['hallucination_rate_pct']}%",
-            "Cost Savings vs Premium": f"{baselines['FARMSYNC']['cost_savings_vs_premium_pct']}%"
-        },
-        {
-            "Architecture": "Simulated Premium-Only (Prompt-Only VLM)",
-            "Cost ($)": f"${baselines['Premium_Only']['cost_usd']:.5f}",
-            "Latency (ms)": f"{baselines['Premium_Only']['latency_ms']} ms",
-            "Spatial Hallucinations": f"{baselines['Premium_Only']['hallucination_rate_pct']}%",
-            "Cost Savings vs Premium": "0.0%"
-        },
-        {
-            "Architecture": "Simulated Static Routing (No Verifier)",
-            "Cost ($)": f"${baselines['Static_Routing']['cost_usd']:.5f}",
-            "Latency (ms)": f"{baselines['Static_Routing']['latency_ms']} ms",
-            "Spatial Hallucinations": f"{baselines['Static_Routing']['hallucination_rate_pct']}%",
-            "Cost Savings vs Premium": f"{baselines['Static_Routing']['cost_savings_vs_premium_pct']}%"
-        }
-    ]
-    st.table(pd.DataFrame(b_data))
-
-    # 2. 50-Query Benchmark Results (Measured vs Simulated)
-    st.markdown("---")
-    st.markdown("#### 50-Query Benchmark Results (Measured FARMSYNC vs Simulated Baselines)")
-    st.caption("Measurements across 50 diverse queries spanning Confident Grounded, Perception Escalation, Buffer & Access, Document Extent Discrepancies, and Unsupported/Abstain categories:")
-
-    bench_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "benchmark_results.json")
-    if os.path.exists(bench_path):
-        try:
-            with open(bench_path, "r", encoding="utf-8") as f:
-                bench_data = json.load(f)
-            
-            b_summary = bench_data.get("summary", {})
-            bench_table = [
-                {
-                    "Architecture": "FARMSYNC (Measured Live Run)",
-                    "Measured Accuracy": f"{b_summary.get('FARMSYNC', {}).get('verified_accuracy_pct', 100.0)}%",
-                    "Avg Cost ($)": f"${b_summary.get('FARMSYNC', {}).get('average_cost_usd', 0.0012):.5f}",
-                    "Avg Latency (ms)": f"{b_summary.get('FARMSYNC', {}).get('average_latency_ms', 311)} ms",
-                    "Spatial Hallucinations": f"{b_summary.get('FARMSYNC', {}).get('spatial_hallucination_rate_pct', 0.0)}%",
-                    "Cost Savings": f"{b_summary.get('FARMSYNC', {}).get('cost_savings_vs_premium_pct', 90.4)}%"
-                },
-                {
-                    "Architecture": "Simulated Premium-Only (Frontier VLM Baseline)",
-                    "Measured Accuracy": f"{b_summary.get('Premium_Only', {}).get('verified_accuracy_pct', 46.0)}%",
-                    "Avg Cost ($)": f"${b_summary.get('Premium_Only', {}).get('average_cost_usd', 0.0125):.5f}",
-                    "Avg Latency (ms)": f"{b_summary.get('Premium_Only', {}).get('average_latency_ms', 1632)} ms",
-                    "Spatial Hallucinations": f"{b_summary.get('Premium_Only', {}).get('spatial_hallucination_rate_pct', 44.0)}%",
-                    "Cost Savings": "0.0%"
-                },
-                {
-                    "Architecture": "Simulated Static Routing (Fixed Routing Baseline)",
-                    "Measured Accuracy": f"{b_summary.get('Static_Routing', {}).get('verified_accuracy_pct', 44.0)}%",
-                    "Avg Cost ($)": f"${b_summary.get('Static_Routing', {}).get('average_cost_usd', 0.00085):.5f}",
-                    "Avg Latency (ms)": f"{b_summary.get('Static_Routing', {}).get('average_latency_ms', 176)} ms",
-                    "Spatial Hallucinations": f"{b_summary.get('Static_Routing', {}).get('spatial_hallucination_rate_pct', 32.0)}%",
-                    "Cost Savings": f"{b_summary.get('Static_Routing', {}).get('cost_savings_vs_premium_pct', 93.2)}%"
-                }
-            ]
-            st.table(pd.DataFrame(bench_table))
-
-            if "category_breakdown" in bench_data:
-                st.markdown("##### Category-Level Performance Breakdown (FARMSYNC)")
-                cat_rows = []
-                for cat_name, stats in bench_data["category_breakdown"].items():
-                    cat_rows.append({
-                        "Category": cat_name.replace("_", " ").title(),
-                        "Queries": stats.get("total_queries"),
-                        "Accuracy": f"{stats.get('accuracy_pct')}%",
-                        "Avg Latency": f"{stats.get('avg_latency_ms')} ms",
-                        "Avg Cost": f"${stats.get('avg_cost_usd', 0.0):.5f}"
-                    })
-                st.dataframe(pd.DataFrame(cat_rows), width="stretch")
-        except Exception as e:
-            st.warning(f"Could not load benchmark results: {e}")
-
-    col_btn, _ = st.columns([1, 2])
-    with col_btn:
-        if st.button("▶ Re-run 50-Query Head-to-Head Benchmark"):
-            with st.spinner("Executing 50 benchmark queries across FARMSYNC, Premium, and Static baselines..."):
-                from farmsync.benchmark.evaluator import run_benchmark_evaluation
-                run_benchmark_evaluation()
-                st.success("✅ 50-Query Benchmark successfully evaluated and updated!")
-                st.experimental_rerun()
-
-    st.success("✅ **Key Takeaway for Evaluators**: FARMSYNC delivers **>90% cost reduction** and **~83% latency reduction** compared to pure commercial models, while eliminating 100% of spatial hallucinations through deterministic GeoPandas/Shapely GIS tooling!")
+    st.subheader("Measured workflow telemetry")
+    st.warning("Historical 50-query results predate the source-evidence fixes. They are not current accuracy evidence. Competitor figures were simulations, not live provider comparisons.")
+    st.metric("Current measured workflow latency", f"{telemetry['total_latency_ms']} ms")
+    st.metric("Estimated routing cost", f"${telemetry['total_estimated_cost_usd']:.5f}")
+    st.caption("Estimated routing cost is not the actual AWS bill. There is no validated claim of 100% accuracy, zero hallucinations or unchanged accuracy at a given cost saving.")
+    st.json({"planner_source": telemetry.get("planner_source"), "planning_usage": telemetry.get("planning_usage"), "policy_version": trust.get("policy_version"), "score_kind": trust.get("score_kind")})
 
 # Tab 6: JSON Output
 with tab_json:

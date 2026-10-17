@@ -1,0 +1,156 @@
+{
+  "protocol": "grouped-train-validation-test-v1",
+  "seed": 42,
+  "dataset_sha256": "3c8538a07593c6c96c471f638875d1dad870ba30fe44fe45130b36fd7f7a9124",
+  "model_sha256": "70cf4b2856a959477215600bd2953e75318f2e2a4a324e8e6d9d99d7bdbd1c37",
+  "samples": 2915,
+  "train": 1860,
+  "validation": 462,
+  "test": 593,
+  "group_overlap": 0,
+  "duplicate_content_overlap": 0,
+  "excluded": {
+    "missing_label": 0,
+    "unmatched_or_ambiguous_file": 1745,
+    "duplicate": 9983,
+    "missing_group": 0,
+    "corrupt_image": 0
+  },
+  "crop": {
+    "accuracy": 0.8988195615514334,
+    "nll": 0.35183054688484827,
+    "ece_10_bins": 0.029064155097353477,
+    "per_class": {
+      "Rice (Paddy)": {
+        "precision": 0.9738717339667459,
+        "recall": 0.9403669724770642,
+        "f1-score": 0.9568261376896149,
+        "support": 436.0
+      },
+      "Coconut": {
+        "precision": 0.8041237113402062,
+        "recall": 0.8387096774193549,
+        "f1-score": 0.8210526315789474,
+        "support": 93.0
+      },
+      "Maize": {
+        "precision": 0.6,
+        "recall": 0.7142857142857143,
+        "f1-score": 0.6521739130434783,
+        "support": 21.0
+      },
+      "Sugarcane": {
+        "precision": 0.5925925925925926,
+        "recall": 0.7619047619047619,
+        "f1-score": 0.6666666666666666,
+        "support": 21.0
+      },
+      "Banana": {
+        "precision": 0.6086956521739131,
+        "recall": 0.8235294117647058,
+        "f1-score": 0.7,
+        "support": 17.0
+      },
+      "Sorghum": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 2.0
+      },
+      "Cassava": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 0.0
+      },
+      "Marigold": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 0.0
+      },
+      "Cotton": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 2.0
+      },
+      "Groundnut": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 0.0
+      },
+      "Mango": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 1.0
+      },
+      "accuracy": 0.8988195615514334,
+      "macro avg": {
+        "precision": 0.3253894263703143,
+        "recall": 0.37079968525923646,
+        "f1-score": 0.3451563044526098,
+        "support": 593.0
+      },
+      "weighted avg": {
+        "precision": 0.9018277431628016,
+        "recall": 0.8988195615514334,
+        "f1-score": 0.8990383523497928,
+        "support": 593.0
+      }
+    }
+  },
+  "stage": {
+    "accuracy": 0.8043844856661045,
+    "nll": 0.4717303387614274,
+    "ece_10_bins": 0.056728488980819156,
+    "per_class": {
+      "vegetation": {
+        "precision": 0.8389423076923077,
+        "recall": 0.8790931989924433,
+        "f1-score": 0.8585485854858549,
+        "support": 397.0
+      },
+      "full_growth": {
+        "precision": 0.7272727272727273,
+        "recall": 0.7231638418079096,
+        "f1-score": 0.7252124645892352,
+        "support": 177.0
+      },
+      "sown": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 12.0
+      },
+      "harvesting": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 6.0
+      },
+      "flowering": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 1.0
+      },
+      "accuracy": 0.8043844856661045,
+      "macro avg": {
+        "precision": 0.313243006993007,
+        "recall": 0.32045140816007056,
+        "f1-score": 0.316752210015018,
+        "support": 593.0
+      },
+      "weighted avg": {
+        "precision": 0.778730807556693,
+        "recall": 0.8043844856661045,
+        "f1-score": 0.7912418122599982,
+        "support": 593.0
+      }
+    }
+  },
+  "limitations": "Supplied labels and claimed parcel groups; not an independent real-field trial, legal verification or disease validation. Rare-class metrics may have few or zero test examples."
+}

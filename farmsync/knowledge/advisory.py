@@ -368,6 +368,8 @@ class AgronomyKnowledgeEngine:
             "growth_stage": top_doc.get("growth_stage", clean_stage),
             "found": True,
             "source_grounded": True,
+            "grounding_scope": "Matched the supplied local corpus; external publication authenticity and agronomic suitability are not independently verified",
+            "independently_verified": False,
             "stage_match_status": "EXACT_STAGE_MATCH",
             "advisory_title": top_doc.get("title"),
             "fertilizer_schedule": top_doc.get("fertilizer_schedule"),

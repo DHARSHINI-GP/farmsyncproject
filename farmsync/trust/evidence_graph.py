@@ -93,7 +93,13 @@ class EvidenceGraphBuilder:
                 "claimed_extent_acres": doc_claims.get("claimed_extent_acres"),
                 "page_number": doc_claims.get("page_number"),
                 "confidence": doc_claims.get("ocr_confidence") if doc_found else 0.0,
-                "status": "VERIFIED_EXTRACTED" if doc_found else "EVIDENCE_NOT_FOUND"
+                "status": doc_claims.get("status", "SOURCE_CLAIM_EXTRACTED") if doc_found else "EVIDENCE_NOT_FOUND",
+                "source_sha256": doc_claims.get("source_sha256"),
+                "raw_text_snippet": doc_claims.get("raw_text_snippet"),
+                "field_status": doc_claims.get("field_status"),
+                "extraction_status": doc_claims.get('status'),
+                "observations": doc_claims.get('observations', []),
+                "confidence_kind": doc_claims.get("confidence_kind", "not calibrated")
             },
             {
                 "source_type": "DATABASE_REGISTRY",
@@ -120,7 +126,7 @@ class EvidenceGraphBuilder:
                 ),
                 "is_independent_teacher": vision_result.get("is_independent_teacher", False),
                 "teacher_source": vision_result.get("teacher_source"),
-                "status": "VERIFIED_PERCEIVED" if has_photo else "PHOTO_ABSENT"
+                "status": ("MODEL_PREDICTION_ALIGNED" if vision_result.get('photo_association_verified') else "MODEL_PREDICTION_UNLINKED") if has_photo else "PHOTO_ABSENT"
             }
         ]
 
@@ -156,6 +162,9 @@ class EvidenceGraphBuilder:
                 "extent_difference_pct": registry_check.get("extent_diff_pct"),
                 "predicted_crop": crop_name,
                 "photo_association_verified": vision_result.get("photo_association_verified", False),
+                "image_prediction_confidence": vision_result.get('final_confidence') if has_photo else None,
+                "photo_coordinate_containment": vision_result.get("coordinate_containment", False),
+                "photo_location_source": vision_result.get("location_source"),
                 "growth_stage": crop_stage,
                 "land_classification": doc_claims.get("land_classification") or registry_check.get("land_classification", "Agricultural"),
                 "document_found": doc_found,
@@ -169,11 +178,12 @@ class EvidenceGraphBuilder:
                 "shapely_containment_valid": spatial_constraints.get("cadastral_containment_valid", False),
                 "extent_mismatch_pct": registry_check.get("extent_diff_pct"),
                 "distance_to_waterbody_meters": spatial_constraints.get("distance_to_waterbody_meters"),
-                "waterbody_buffer_threshold_meters": spatial_constraints.get("waterbody_buffer_threshold_meters", 50.0),
                 "waterbody_buffer_conflict": spatial_constraints.get("waterbody_buffer_conflict", False),
-                "waterbody_buffer_50m_compliant": spatial_constraints.get("waterbody_buffer_50m_compliant", True),
+                "waterbody_buffer_50m_compliant": spatial_constraints.get("waterbody_buffer_50m_compliant", False),
+                "waterbody_buffer_compliant": spatial_constraints.get("waterbody_buffer_compliant", not spatial_constraints.get("waterbody_buffer_conflict", True)),
+                "waterbody_buffer_threshold_meters": spatial_constraints.get("waterbody_buffer_threshold_meters"),
                 "distance_to_road_meters": spatial_constraints.get("distance_to_road_meters"),
-                "road_accessible": spatial_constraints.get("road_accessible", True),
+                "road_accessible": spatial_constraints.get("road_accessible", False),
                 "deterministic_spatial_verified": spatial_constraints.get("deterministic_spatial_verified", False)
             },
             "trust_metrics": {

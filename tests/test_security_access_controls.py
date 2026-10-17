@@ -69,7 +69,12 @@ class TestUploadPayloadValidation:
 
     def test_upload_accepts_valid_pdf_with_magic_bytes(self):
         client = TestClient(app)
-        valid_pdf = io.BytesIO(b"%PDF-1.5 authentic land document content for survey audit")
+        valid_pdf = io.BytesIO()
+        from reportlab.pdfgen import canvas
+        doc = canvas.Canvas(valid_pdf)
+        doc.drawString(40, 750, "Survey 384; Owner: Actual claimant; Area: 10 acres")
+        doc.save()
+        valid_pdf.seek(0)
         files = {"file": ("valid_doc.pdf", valid_pdf, "application/pdf")}
 
         response = client.post("/api/documents/upload", files=files)
@@ -88,7 +93,7 @@ class TestUploadPayloadValidation:
 
         response = client.post("/api/documents/upload", files=files)
         assert response.status_code == 413
-        assert "exceeds maximum allowed size" in response.json()["detail"]
+        assert "size limit" in response.json()["detail"]
 
 
 class TestAccessControlsAndAuthentication:

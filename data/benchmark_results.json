@@ -1434,5 +1434,8 @@
         "decision": "ACCEPT"
       }
     ]
-  }
+  },
+  "status": "HISTORICAL_INVALID_AFTER_SOURCE_EVIDENCE_FIXES",
+  "current_configuration_validated": false,
+  "limitations": "Historical data with simulated baselines. Not proof of current accuracy, actual billing savings or zero hallucinations."
 }
