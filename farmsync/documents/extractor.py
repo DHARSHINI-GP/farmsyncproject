@@ -395,6 +395,21 @@ class DocumentRegistryEngine:
         # Resolve path
         if doc_path:
             norm_doc = doc_path.replace("/", os.sep).replace("\\", os.sep)
+            # Only bundled/uploaded PDFs may be opened, including through symlinks.
+            allowed_root = os.path.realpath(self.land_docs_dir)
+            candidate = os.path.realpath(os.path.join(allowed_root, norm_doc))
+            try:
+                within_root = os.path.commonpath([allowed_root, candidate]) == allowed_root
+            except ValueError:
+                within_root = False
+            if not within_root or not norm_doc.lower().endswith(".pdf"):
+                return {
+                    "found": False, "survey_no": clean_no,
+                    "document_source": os.path.basename(norm_doc),
+                    "extracted_owner": None, "claimed_extent_acres": None,
+                    "status": "DOCUMENT_PATH_NOT_ALLOWED",
+                    "error": "Document must be a PDF inside the land document library."
+                }
             # Check absolute path
             if os.path.isabs(norm_doc) and os.path.exists(norm_doc):
                 resolved_full_path = norm_doc

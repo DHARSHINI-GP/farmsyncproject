@@ -81,7 +81,9 @@ class TestBedrockQualification:
         assert res["reasoning_mode"] == "AWS_BEDROCK_CONVERSE"
         assert res["bedrock_api_pattern"] == "Bedrock_Converse_API"
         assert "via Bedrock_Converse_API" in res["model_used"]
-        assert "Survey 384 verified at 10.35 Acres" in res["answer"]
+        assert "Survey 384 verified at 10.35 Acres" not in res["answer"]
+        assert res["answer_source"] == "VERIFIED_TOOL_TEMPLATE"
+        assert "No live government ownership" in res["answer"]
         ai_engine_with_mock_bedrock.bedrock_client.converse.assert_called_once()
 
     def test_converse_api_passes_expected_structure(self, ai_engine_with_mock_bedrock):
@@ -103,8 +105,30 @@ class TestBedrockQualification:
         assert "messages" in call_kwargs
         assert "system" in call_kwargs
         assert "inferenceConfig" in call_kwargs
-        assert call_kwargs["inferenceConfig"]["maxTokens"] == 450
-        assert call_kwargs["inferenceConfig"]["temperature"] == 0.2
+        assert call_kwargs["inferenceConfig"]["maxTokens"] == 40
+        assert call_kwargs["inferenceConfig"]["temperature"] == 0
+
+    @pytest.mark.parametrize("model_text", [
+        "The government portal confirms Ramesh owns this land and has no litigation.",
+        '{"focus":"crop","answer":"Government ownership confirmed"}',
+        '{"focus":"Government ownership confirmed"}',
+        '{"focus":["crop"]}',
+    ])
+    def test_generated_claims_cannot_enter_verified_report(self, ai_engine_with_mock_bedrock, model_text):
+        eng = ai_engine_with_mock_bedrock
+        eng.bedrock_client.converse.return_value = {"output": {"message": {"content": [{"text": model_text}]}}}
+        result = eng.process_query("Confirm ownership of Survey 384")
+        assert "Government ownership confirmed" not in result["answer"]
+        assert "government portal confirms" not in result["answer"]
+        assert result["report_focus"] == "general"
+        assert result["answer_source"] == "VERIFIED_TOOL_TEMPLATE"
+
+    def test_valid_model_focus_can_reorder_only_grounded_sections(self, ai_engine_with_mock_bedrock):
+        eng = ai_engine_with_mock_bedrock
+        eng.bedrock_client.converse.return_value = {"output": {"message": {"content": [{"text": '{"focus":"crop"}'}]}}}
+        result = eng.process_query("Inspect crop in Survey 384")
+        assert result["report_focus"] == "crop"
+        assert result["answer"].startswith("### Field Intelligence")
 
 
 class TestTLSVerification:

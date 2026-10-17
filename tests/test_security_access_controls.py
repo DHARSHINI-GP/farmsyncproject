@@ -97,6 +97,7 @@ class TestAccessControlsAndAuthentication:
     """
 
     def test_local_loopback_client_permitted_without_key_in_dev(self, monkeypatch):
+        monkeypatch.setenv("FARMSYNC_ALLOW_RUNTIME_CREDENTIALS", "true")
         # When FARMSYNC_API_KEY is not set, local loopback (testclient) is permitted
         monkeypatch.delenv("FARMSYNC_API_KEY", raising=False)
 
@@ -135,6 +136,7 @@ class TestAccessControlsAndAuthentication:
         assert res.status_code == 401
 
     def test_configured_api_key_enforced_strictly(self, monkeypatch):
+        monkeypatch.setenv("FARMSYNC_ALLOW_RUNTIME_CREDENTIALS", "true")
         secret_key = "farmsync-secure-enterprise-key-2026"
         monkeypatch.setenv("FARMSYNC_API_KEY", secret_key)
 

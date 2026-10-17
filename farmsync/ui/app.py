@@ -106,16 +106,26 @@ st.sidebar.subheader("🧪 Red-Team & Robustness Toggles")
 force_escalate = st.sidebar.checkbox("Simulate Low-Confidence Photo (Trigger Teacher Escalation)", value=False)
 simulate_conflict = st.sidebar.checkbox("Inject Document-Registry Conflict (Trigger Abstention)", value=False)
 simulate_ood = st.sidebar.checkbox("Simulate Out-of-Distribution Weed/Unknown Crop", value=False)
+selected_photo = st.sidebar.selectbox(
+    "Optional image-only evidence",
+    [""] + sorted(orchestrator.vision.image_registry),
+    format_func=lambda name: name or "Only spatially matched parcel photo",
+)
 
-run_button = st.sidebar.button("🚀 Run FARMSYNC Orchestration", type="primary", use_container_width=True)
+run_button = st.sidebar.button("🚀 Run FARMSYNC Orchestration", type="primary", width="stretch")
 
 # Run Orchestration
-res = orchestrator.execute_request(
-    query=query_text,
-    force_escalate_vision=force_escalate,
-    simulate_conflict=simulate_conflict,
-    simulate_unsupported_crop=simulate_ood
-)
+execution_key = (query_text, force_escalate, simulate_conflict, simulate_ood, selected_photo)
+if run_button or st.session_state.get("execution_key") != execution_key:
+    st.session_state["orchestration_result"] = orchestrator.execute_request(
+        query=query_text,
+        force_escalate_vision=force_escalate,
+        simulate_conflict=simulate_conflict,
+        simulate_unsupported_crop=simulate_ood,
+        image_filename=selected_photo or None
+    )
+    st.session_state["execution_key"] = execution_key
+res = st.session_state["orchestration_result"]
 
 vobj = res["verified_result_object"]
 trust = vobj["trust_metrics"]
@@ -143,9 +153,9 @@ with m2:
 
 with m3:
     st.metric(
-        label="Total Request Cost",
+        label="Estimated Routing Cost",
         value=f"${telemetry['total_estimated_cost_usd']:.4f}",
-        delta=f"-{baselines['FARMSYNC']['cost_savings_vs_premium_pct']}% vs Pure GPT-4o"
+        delta="Scenario assumptions; not an AWS bill"
     )
 
 with m4:
@@ -241,7 +251,7 @@ with tab_map:
         st.markdown(f"**Documented Area:** `{attrs['documented_area_acres']} acres`")
         
         diff_pct = attrs['extent_difference_pct']
-        diff_color = "green" if diff_pct <= 5.0 else "red"
+        diff_color = "gray" if diff_pct is None else ("green" if diff_pct <= 5.0 else "red")
         st.markdown(f"**Extent Discrepancy:** <span style='color:{diff_color}; font-weight:bold;'>{diff_pct}%</span>", unsafe_allow_html=True)
         
         st.markdown("---")
@@ -269,25 +279,28 @@ with tab_crop:
     
     with col_img:
         st.subheader("Field Ground Photo Perception")
-        img_record = orchestrator.vision.get_image_for_survey(vobj["survey_number"])
+        filename = next((e.get("source_ref") for e in vobj.get("source_evidence", []) if e.get("source_type") == "FIELD_PHOTOGRAPH"), None)
+        img_record = orchestrator.vision.image_registry.get(filename) if filename else None
         if img_record and os.path.exists(img_record["filepath"]):
-            st.image(img_record["filepath"], caption=f"Field Photo: {img_record['filename']}", use_column_width=True)
+            st.image(img_record["filepath"], caption=f"Field Photo: {img_record['filename']}")
         else:
             st.info("Field photo preview placeholder.")
         
         st.markdown("---")
-        actual_model = telemetry['steps'][3].get('actual_execution_model') or telemetry['steps'][3]['model_or_tool']
-        is_indep = telemetry['steps'][3].get('is_independent_teacher', False)
-        st.markdown(f"**Planned Route:** `{telemetry['steps'][3]['model_or_tool']}`")
+        vision_step = next((step for step in telemetry['steps'] if 'has_image' in step), {})
+        actual_model = vision_step.get('actual_execution_model') or vision_step.get('model_or_tool', 'Vision not executed')
+        is_indep = vision_step.get('is_independent_teacher', False)
+        st.markdown(f"**Planned Route:** `{vision_step.get('planned_route', 'Vision not planned')}`")
         st.markdown(f"**Runtime Execution:** `{actual_model}`")
         if force_escalate:
             if is_indep:
-                st.success("✅ Escalated to independent multimodal teacher: **Claude-3.5-Sonnet (AWS Bedrock)**")
+                st.success("✅ Escalated to independent multimodal teacher: **Ministral 8B (AWS Bedrock)**")
             else:
                 st.warning("⚠️ Escalated to **MobileNetV3-TTA-Ensemble-Teacher (Local Fallback)** (Bedrock offline; running multi-scale TTA ensemble over student backbone).")
         st.markdown(f"**Predicted Crop:** **`{attrs['predicted_crop']}`**")
         st.markdown(f"**Growth Stage:** **`{attrs['growth_stage']}`**")
         st.markdown(f"**Model Confidence:** `{trust['model_reported_confidence']}`")
+        st.caption("Photo location: matched to the selected polygon" if attrs.get("photo_association_verified") else "Photo location is unverified; image-only findings do not confirm a parcel crop.")
 
     with col_adv:
         st.subheader("Cited Agronomy Advisory (TNAU / ICAR)")
@@ -337,11 +350,11 @@ with tab_graph:
     with col_n:
         st.markdown("#### Evidence Nodes")
         df_nodes = pd.DataFrame(dag_nodes)
-        st.dataframe(df_nodes, use_container_width=True)
+        st.dataframe(df_nodes, width="stretch")
     with col_e:
         st.markdown("#### Provenance Relationships")
         df_edges = pd.DataFrame(dag_edges)
-        st.dataframe(df_edges, use_container_width=True)
+        st.dataframe(df_edges, width="stretch")
     
     st.markdown("---")
     st.markdown("#### Trust Score (FTS) Mathematical Breakdown")
@@ -352,7 +365,7 @@ with tab_graph:
         {"Signal": "Source Consistency (w3=0.25)", "Value": breakdown["source_consistency"]},
         {"Signal": "Deterministic Spatial Validation (w4=0.25)", "Value": breakdown["deterministic_validation"]},
         {"Signal": "Output Schema Validity (w5=0.10)", "Value": breakdown["output_validity"]},
-        {"Signal": "Conflict Penalty (w6=0.20)", "Value": f"-{breakdown['conflict_penalty']}"}
+        {"Signal": "Conflict Penalty (w6=0.20)", "Value": -float(breakdown['conflict_penalty'])}
     ])
     st.table(df_b)
 
@@ -362,7 +375,7 @@ with tab_telemetry:
     st.markdown("Task 1 explicitly evaluates model routing by capability, cost, latency, and verification:")
     
     df_tel = pd.DataFrame(telemetry["steps"])
-    st.dataframe(df_tel[["task_id", "name", "model_or_tool", "type", "latency_ms", "cost_usd", "rationale"]], use_container_width=True)
+    st.dataframe(df_tel[["task_id", "name", "model_or_tool", "type", "latency_ms", "cost_usd", "rationale"]], width="stretch")
     
     col_tc, col_tl = st.columns(2)
     with col_tc:
@@ -453,7 +466,7 @@ with tab_baselines:
                         "Avg Latency": f"{stats.get('avg_latency_ms')} ms",
                         "Avg Cost": f"${stats.get('avg_cost_usd', 0.0):.5f}"
                     })
-                st.dataframe(pd.DataFrame(cat_rows), use_container_width=True)
+                st.dataframe(pd.DataFrame(cat_rows), width="stretch")
         except Exception as e:
             st.warning(f"Could not load benchmark results: {e}")
 

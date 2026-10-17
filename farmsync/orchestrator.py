@@ -97,7 +97,9 @@ class FarmSyncOrchestrator:
         survey_no: Optional[str] = None,
         force_escalate_vision: bool = False,
         simulate_conflict: bool = False,
-        simulate_unsupported_crop: bool = False
+        simulate_unsupported_crop: bool = False,
+        parcel_id: Optional[str] = None,
+        image_filename: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Executes an end-to-end multimodal geospatial request by walking the compiled TaskGraph DAG
@@ -109,12 +111,20 @@ class FarmSyncOrchestrator:
         task_graph: TaskGraph = self.compiler.compile(query)
         target_survey = survey_no or task_graph.target_survey_no
         village = task_graph.target_village or "Keelathattaparai"
+        selected = self.spatial.get_parcel(parcel_id) if parcel_id else None
+        if selected and selected["survey_no"] == str(target_survey):
+            parcel_key = parcel_id
+            village = selected["village"]
+        else:
+            parcel_key = target_survey
         target_doc = document_path or task_graph.target_document
 
         # Step 2: Shared execution context for passing data between DAG nodes
         context: Dict[str, Any] = {
             "query": query,
             "survey_no": target_survey,
+            "parcel_key": parcel_key,
+            "image_filename": image_filename,
             "village": village,
             "document_path": target_doc,
             "workflow_type": task_graph.workflow_type,
@@ -165,8 +175,10 @@ class FarmSyncOrchestrator:
             step_meta = self._execute_task_node(task, context, route_decision)
 
             node_elapsed_ms = int((time.time() - node_start) * 1000)
-            step_latency = max(node_elapsed_ms, route_decision["latency_ms"])
+            step_latency = node_elapsed_ms
             cost = route_decision["estimated_cost_usd"]
+            if task.subtask_type in ("VISION_STUDENT", "VERIFICATION_ESCALATION") and not (context.get("vision_result") or {}).get("has_image"):
+                cost = 0.0
             total_cost += cost
 
             task.mark_completed(
@@ -190,6 +202,9 @@ class FarmSyncOrchestrator:
                 "status": task.status
             }
             step_record.update(step_meta)
+            step_record["planned_route"] = route_decision["selected_route"]
+            step_record["estimated_latency_ms"] = route_decision["latency_ms"]
+            step_record["model_or_tool"] = step_meta.get("actual_execution_model") or route_decision["selected_route"]
             telemetry_steps.append(step_record)
 
         total_latency_ms = int((time.time() - start_time) * 1000)
@@ -218,6 +233,8 @@ class FarmSyncOrchestrator:
         advisory_result = context["advisory_result"] or {}
         agri_logistics = context["agri_logistics"]
         trust_result = context["trust_result"] or {}
+        if parcel_gis:
+            village = parcel_gis["village"]
 
         verified_result = self.graph_builder.build_evidence_object(
             survey_no=target_survey,
@@ -232,6 +249,13 @@ class FarmSyncOrchestrator:
             telemetry=telemetry_summary,
             agri_logistics=agri_logistics
         )
+        # Document-vs-GIS extent is distinct from document-vs-demo-registry extent.
+        extent_check = context["extent_check"] or {}
+        extent_pct = extent_check.get("discrepancy_percentage") if doc_claims.get("found") else None
+        verified_result["extracted_attributes"]["extent_difference_pct"] = extent_pct
+        verified_result["deterministic_spatial_checks"]["extent_mismatch_pct"] = extent_pct
+        verified_result["deterministic_spatial_checks"]["extent_verification"] = extent_check
+        verified_result["parcel_id"] = (parcel_gis or {}).get("parcel_id")
 
         # Step 6: Head-to-head Baseline Benchmarking Matrix
         bench_summary = self._load_benchmark_summary()
@@ -243,6 +267,8 @@ class FarmSyncOrchestrator:
             "benchmark_suite": "FARMSYNC 50-Query Multimodal Cadastral Benchmark (Measured vs Simulated)",
             "total_benchmark_queries": 50,
             "methodology_note": "FARMSYNC is measured live query-by-query; competitor baselines are simulated architectural models based on token cost assumptions and prompt-only spatial estimation without external API calls.",
+            "current_configuration_validated": False,
+            "benchmark_notice": "Stored scenario results predate corrected parcel/photo association; re-evaluation is required. Route costs are assumptions, not measured AWS billing.",
             "FARMSYNC": {
                 "evaluation_type": "measured_live_execution",
                 "architecture": "Verified-Utility Router + Deterministic GeoPandas/Shapely GIS + FTS Trust Engine",
@@ -312,24 +338,31 @@ class FarmSyncOrchestrator:
             context["doc_claims"] = doc_claims
             return {
                 "document_source": doc_claims.get("document_source"),
+                "actual_execution_model": doc_claims.get("extraction_method") or "Local PDF extractor",
                 "extraction_method": doc_claims.get("extraction_method"),
                 "evidence_found": doc_claims.get("found", False)
             }
 
         elif stype == "DATABASE_JOIN":
             reg_check = self.docs.cross_check_registry(context["doc_claims"])
+            selected = self.spatial.get_parcel(context["parcel_key"])
+            record = self.docs.revenue_registry.get(str(context["survey_no"]), {})
+            if selected and record.get("village") and record["village"].casefold() != selected["village"].casefold():
+                reg_check.update({"registry_found": False, "owner_match": False, "official_owner": None, "owner_verification_status": "VILLAGE_IDENTITY_MISMATCH"})
             context["reg_check"] = reg_check
             return {
+                "actual_execution_model": "Local demonstration JSON registry",
                 "registry_status": reg_check.get("status")
             }
 
         elif stype == "GEOSPATIAL_GIS":
-            target_survey = context["survey_no"]
+            target_survey = context["parcel_key"]
             doc_claims = context["doc_claims"] or {}
             parcel_gis = self.spatial.get_parcel(target_survey) if target_survey else None
             context["parcel_gis"] = parcel_gis
 
             if parcel_gis:
+                context["village"] = parcel_gis["village"]
                 spatial_constraints = self.spatial.check_constraints(target_survey)
                 claimed_ac = doc_claims.get("claimed_extent_acres")
                 if claimed_ac is not None and claimed_ac > 0:
@@ -387,22 +420,27 @@ class FarmSyncOrchestrator:
             context["spatial_constraints"] = spatial_constraints
             context["extent_check"] = extent_check
             return {
+                "actual_execution_model": "GeoPandas/Shapely EPSG:32644",
                 "cadastral_found": parcel_gis is not None
             }
 
         elif stype == "VISION_STUDENT":
             target_survey = context["survey_no"]
-            img_record = self.vision.get_image_for_survey(target_survey) if target_survey else None
+            parcel = self.spatial.get_parcel(context["parcel_key"])
+            matched_photo = self.vision.get_image_for_survey(target_survey, parcel=parcel) if target_survey and parcel else None
+            img_record = self.vision.image_registry.get(context["image_filename"]) if context.get("image_filename") else matched_photo
+            photo_aligned = bool(img_record and matched_photo and img_record["filename"] == matched_photo["filename"])
             context["img_record"] = img_record
             img_path = img_record["filepath"] if img_record else None
 
             # Student neural inference (or teacher if forced by router)
-            is_forced = (route_decision["selected_route"] == "Claude-3.5-Sonnet-Teacher")
+            is_forced = (route_decision["selected_route"] == "Bedrock-Ministral-8B-Teacher")
             vision_result = self.vision.predict_crop(
                 img_path,
                 simulate_ood=context["simulate_unsupported_crop"],
                 force_escalate=is_forced
             )
+            vision_result["photo_association_verified"] = photo_aligned
             context["vision_result"] = vision_result
             context["vision_confidence"] = vision_result.get("confidence", 0.0)
 
@@ -411,7 +449,7 @@ class FarmSyncOrchestrator:
                 "confidence": vision_result.get("confidence"),
                 "shannon_entropy": vision_result.get("shannon_entropy"),
                 "has_image": vision_result.get("has_image", False),
-                "actual_execution_model": vision_result.get("teacher_model") if vision_result.get("escalated_to_teacher") else vision_result.get("student_model"),
+                "actual_execution_model": (vision_result.get("teacher_model") if vision_result.get("escalated_to_teacher") else vision_result.get("student_model")) if vision_result.get("has_image") else "Vision skipped: no matched photo",
                 "is_independent_teacher": vision_result.get("is_independent_teacher", False),
                 "teacher_source": vision_result.get("teacher_source")
             }
@@ -429,6 +467,7 @@ class FarmSyncOrchestrator:
                         simulate_ood=context["simulate_unsupported_crop"],
                         force_escalate=True
                     )
+                    vision_result["photo_association_verified"] = bool((context.get("vision_result") or {}).get("photo_association_verified"))
                     context["vision_result"] = vision_result
                 escalation_decision = "ESCALATED_TO_TEACHER"
             elif not vision_result.get("has_image"):
@@ -451,7 +490,7 @@ class FarmSyncOrchestrator:
                 "escalation_decision": escalation_decision,
                 "final_crop": context["final_crop"],
                 "final_stage": context["final_stage"],
-                "actual_execution_model": vision_result.get("teacher_model") if vision_result.get("escalated_to_teacher") else vision_result.get("student_model"),
+                "actual_execution_model": (vision_result.get("teacher_model") if vision_result.get("escalated_to_teacher") else vision_result.get("student_model")) if vision_result.get("has_image") else "Vision skipped: no matched photo",
                 "is_independent_teacher": vision_result.get("is_independent_teacher", False),
                 "teacher_source": vision_result.get("teacher_source")
             }
@@ -483,6 +522,7 @@ class FarmSyncOrchestrator:
 
             context["advisory_result"] = advisory_result
             return {
+                "actual_execution_model": "Local agronomy corpus retrieval",
                 "crop_advised": final_crop,
                 "growth_stage": final_stage,
                 "citation": advisory_result.get("citation_source")
@@ -501,7 +541,7 @@ class FarmSyncOrchestrator:
             has_reg = bool(reg_check.get("registry_found", False) and reg_check.get("official_owner"))
             is_authoritative_reg = bool(has_reg and reg_check.get("is_authoritative_government_record", False))
             has_parcel = (parcel_gis is not None)
-            has_photo = bool(vision_result.get("has_image", False))
+            has_photo = bool(vision_result.get("has_image", False) and vision_result.get("photo_association_verified", False))
 
             wf_type = context.get("workflow_type")
             if wf_type == "ENVIRONMENTAL_BUFFER_AUDIT":
@@ -544,6 +584,7 @@ class FarmSyncOrchestrator:
                 )
                 context["trust_result"] = trust_result
                 return {
+                    "actual_execution_model": "FARMSYNC local trust engine",
                     "trust_decision": trust_result.get("decision"),
                     "fts_score": trust_result.get("fts_score")
                 }
@@ -594,6 +635,7 @@ class FarmSyncOrchestrator:
             )
             context["trust_result"] = trust_result
             return {
+                "actual_execution_model": "FARMSYNC local trust engine",
                 "trust_decision": trust_result.get("decision"),
                 "fts_score": trust_result.get("fts_score")
             }

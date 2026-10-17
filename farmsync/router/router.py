@@ -34,7 +34,7 @@ class CapabilityRegistry:
         "DATABASE_JOIN": {
             "candidates": [
                 {
-                    "route": "PostgreSQL_Registry_Connector",
+                    "route": "Local_Demo_Registry",
                     "type": "DETERMINISTIC_TOOL",
                     "cost_per_call": 0.0000,
                     "typical_latency_ms": 20,
@@ -54,7 +54,7 @@ class CapabilityRegistry:
                     "rationale": "Unnecessary LLM overhead for relational primary key lookups."
                 }
             ],
-            "default_route": "PostgreSQL_Registry_Connector"
+            "default_route": "Local_Demo_Registry"
         },
         "DOCUMENT_OCR": {
             "candidates": [
@@ -84,7 +84,7 @@ class CapabilityRegistry:
         "VISION_STUDENT": {
             "candidates": [
                 {
-                    "route": "Qwen2.5-VL-7B-Student",
+                    "route": "MobileNetV3-CropNet-Student",
                     "type": "OPEN_WEIGHT_MODEL",
                     "cost_per_call": 0.0004,
                     "typical_latency_ms": 85,
@@ -94,7 +94,7 @@ class CapabilityRegistry:
                     "rationale": "Open-weight student model handles routine perception economically; escalates only on uncertainty."
                 },
                 {
-                    "route": "Claude-3.5-Sonnet-Teacher",
+                    "route": "Bedrock-Ministral-8B-Teacher",
                     "type": "PROPRIETARY_VLM",
                     "cost_per_call": 0.0045,
                     "typical_latency_ms": 680,
@@ -114,7 +114,7 @@ class CapabilityRegistry:
                     "rationale": "Expensive proprietary frontier model with high latency and token pricing."
                 }
             ],
-            "default_route": "Qwen2.5-VL-7B-Student"
+            "default_route": "MobileNetV3-CropNet-Student"
         },
         "VERIFICATION_ESCALATION": {
             "candidates": [
@@ -129,7 +129,7 @@ class CapabilityRegistry:
                     "rationale": "Student model confidence exceeds utility threshold; proprietary VLM escalation safely bypassed."
                 },
                 {
-                    "route": "Claude-3.5-Sonnet-Teacher",
+                    "route": "Bedrock-Ministral-8B-Teacher",
                     "type": "PROPRIETARY_VLM",
                     "cost_per_call": 0.0045,
                     "typical_latency_ms": 680,
@@ -144,7 +144,7 @@ class CapabilityRegistry:
         "RAG_KNOWLEDGE": {
             "candidates": [
                 {
-                    "route": "Bedrock_Ministral_RAG",
+                    "route": "Local_Corpus_Retrieval",
                     "type": "HYBRID_RAG_LLM",
                     "cost_per_call": 0.0008,
                     "typical_latency_ms": 210,
@@ -164,7 +164,7 @@ class CapabilityRegistry:
                     "rationale": "Uncited general LLM prone to hallucinations in agricultural dosage and regional cultivation."
                 }
             ],
-            "default_route": "Bedrock_Ministral_RAG"
+            "default_route": "Local_Corpus_Retrieval"
         },
         "TRUST_SYNTHESIS": {
             "candidates": [
@@ -240,7 +240,7 @@ class VerifiedUtilityRouter:
 
         # Dynamically calibrate student / pass routes when empirical confidence is available
         if measured_confidence is not None:
-            if candidate["route"] in ("Qwen2.5-VL-7B-Student", "Accept_Student_Perception"):
+            if candidate["route"] in ("MobileNetV3-CropNet-Student", "Accept_Student_Perception"):
                 quality = max(0.0, min(1.0, float(measured_confidence)))
                 risk = max(0.0, min(1.0, 1.0 - quality))
 
@@ -295,7 +295,7 @@ class VerifiedUtilityRouter:
             if force_escalation:
                 if "Teacher" in cand["route"]:
                     score += 10.0
-                elif cand["route"] in ("Qwen2.5-VL-7B-Student", "Accept_Student_Perception"):
+                elif cand["route"] in ("MobileNetV3-CropNet-Student", "Accept_Student_Perception"):
                     score -= 10.0
 
             cand_eval = {

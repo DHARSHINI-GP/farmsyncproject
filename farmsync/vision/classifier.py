@@ -20,6 +20,7 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 from farmsync.vision.train_crop_model import MultiTaskCropNet, CROP_CLASSES, STAGE_CLASSES
+from farmsync.aws import create_client, validate_model, validate_region, TEACHER_MODEL
 
 class CropVisionPipeline:
     """
@@ -30,7 +31,7 @@ class CropVisionPipeline:
     2. Calibrated Uncertainty & OOD Detection: Analyzes softmax probability distributions
        and Shannon entropy to detect ambiguous or out-of-distribution field photographs.
     3. Dual-Tier Teacher Escalation: Escalates uncertain observations to AWS Bedrock
-       multimodal foundation models (Claude-3.5-Sonnet) with multi-scale test-time augmentation.
+       multimodal foundation models (Ministral-8B) with multi-scale test-time augmentation.
     4. Strict Refuse-to-Substitute Policy: If a parcel has no verified field photograph,
        returns None rather than substituting an arbitrary image from another parcel.
     """
@@ -53,7 +54,11 @@ class CropVisionPipeline:
         self.stage_classes = STAGE_CLASSES
 
         # 1. Initialize PyTorch Vision Backbone & MultiTask Head
-        if TORCH_AVAILABLE and models is not None and transforms is not None:
+        backbone_ready = False
+        if TORCH_AVAILABLE and models is not None:
+            weights_name = os.path.basename(models.MobileNet_V3_Small_Weights.DEFAULT.url)
+            backbone_ready = os.path.isfile(os.path.join(torch.hub.get_dir(), "checkpoints", weights_name))
+        if TORCH_AVAILABLE and models is not None and transforms is not None and backbone_ready and os.path.isfile(self.weights_path):
             print("Initializing PyTorch MobileNetV3-CropNet Vision Model...")
             self.mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
             self.mobilenet.eval()
@@ -81,10 +86,11 @@ class CropVisionPipeline:
             self.pool = None
             self.model = None
             self.transform = None
-            print("Notice: PyTorch / torchvision not available. Neural vision inference operating in graceful stub mode.")
+            print("Notice: Vision runtime or model artifacts unavailable. Crop inference will abstain.")
 
         # Teacher Multimodal VLM Client (AWS Bedrock)
         self.bedrock_client = None
+        self.bedrock_model_id = os.getenv("BEDROCK_VISION_MODEL_ID", TEACHER_MODEL)
         self._init_bedrock_client()
 
         # Build Ground Truth Index
@@ -94,27 +100,31 @@ class CropVisionPipeline:
 
     def _init_bedrock_client(self):
         """Initializes Bedrock client if AWS credentials are available."""
+        if os.getenv("FARMSYNC_OFFLINE", "false").lower() == "true":
+            self.bedrock_client = None
+            return
         try:
-            import boto3
-            session = boto3.Session()
-            creds = session.get_credentials()
-            if creds:
-                self.bedrock_client = boto3.client("bedrock-runtime", region_name=os.getenv("AWS_REGION", "ap-south-1"))
+            validate_model(self.bedrock_model_id, text_only=True)
+            self.bedrock_client = create_client("bedrock-runtime")
         except Exception as e:
             self.bedrock_client = None
 
     def configure_aws(self, access_key_id: str, secret_access_key: str, session_token: Optional[str] = None, region: str = "ap-south-1"):
         """Configures AWS Bedrock client dynamically from UI settings."""
+        validate_region(region)
+        self.bedrock_client = None
+        if os.getenv("FARMSYNC_OFFLINE", "false").lower() == "true":
+            return {"status": "DISABLED", "message": "FARMSYNC_OFFLINE is enabled"}
         try:
-            import boto3
-            kwargs = {
-                "aws_access_key_id": access_key_id,
-                "aws_secret_access_key": secret_access_key,
-                "region_name": region
-            }
+            validate_model(self.bedrock_model_id, text_only=True)
+            # Legacy admin-only path; all modules share the same credential provider.
+            os.environ["AWS_ACCESS_KEY_ID"] = access_key_id
+            os.environ["AWS_SECRET_ACCESS_KEY"] = secret_access_key
             if session_token:
-                kwargs["aws_session_token"] = session_token
-            self.bedrock_client = boto3.client("bedrock-runtime", **kwargs)
+                os.environ["AWS_SESSION_TOKEN"] = session_token
+            else:
+                os.environ.pop("AWS_SESSION_TOKEN", None)
+            self.bedrock_client = create_client("bedrock-runtime", region)
             return {"status": "SUCCESS", "message": "Bedrock vision client configured"}
         except Exception as e:
             return {"status": "ERROR", "message": str(e)}
@@ -157,7 +167,7 @@ class CropVisionPipeline:
                     if survey_no:
                         self.survey_image_index.setdefault(survey_no, []).append(matched_file)
 
-    def get_image_for_survey(self, survey_no: str) -> Optional[Dict[str, Any]]:
+    def get_image_for_survey(self, survey_no: str, parcel: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         """
         Finds field photograph linked specifically to the queried survey number.
         
@@ -175,6 +185,19 @@ class CropVisionPipeline:
                 dash_norm = clean_no.replace("/", "-")
                 files = self.survey_image_index.get(dash_norm, [])
 
+        if files and parcel:
+            from shapely.geometry import shape, Point
+            boundary = shape(parcel["geometry_geojson"])
+            for filename in files:
+                record = self.image_registry.get(filename, {})
+                try:
+                    lat = float(str(record.get("latitude", "")).split(";")[0])
+                    lon = float(str(record.get("longitude", "")).split(";")[0])
+                    if boundary.covers(Point(lon, lat)):
+                        return record
+                except (ValueError, TypeError):
+                    continue
+            return None
         if files:
             first_valid = files[0]
             if first_valid in self.image_registry:
@@ -193,7 +216,7 @@ class CropVisionPipeline:
         
         1. Student Model: Runs PyTorch MultiTaskCropNet forward inference on pixel tensors.
         2. Uncertainty & OOD: Calculates Shannon entropy and softmax margin.
-        3. Teacher Model Escalation: Calls Bedrock Claude-3.5-Sonnet / Teacher Ensemble
+        3. Teacher Model Escalation: Calls Bedrock Ministral-8B / Teacher Ensemble
            when uncertainty threshold is triggered.
         """
         start_time = time.time()
@@ -240,14 +263,14 @@ class CropVisionPipeline:
                         "top_3_crops": [{"crop": bedrock_res.get("crop"), "probability": bedrock_res.get("confidence", 0.95)}],
                         "is_out_of_distribution": False,
                         "escalated_to_teacher": True,
-                        "teacher_model": "Claude-3.5-Sonnet (AWS Bedrock)",
+                        "teacher_model": f"{self.bedrock_model_id} (AWS Bedrock)",
                         "is_independent_teacher": True,
                         "teacher_source": "AWS_BEDROCK_API",
                         "escalation_note": "Direct Bedrock multimodal VLM invocation (student PyTorch runtime absent).",
                         "final_verified_crop": bedrock_res.get("crop"),
                         "final_verified_stage": bedrock_res.get("stage"),
                         "final_confidence": bedrock_res.get("confidence", 0.95),
-                        "visual_evidence": f"Bedrock Claude-3.5-Sonnet multimodal perception on {filename}"
+                        "visual_evidence": f"Bedrock Ministral-8B multimodal perception on {filename}"
                     }
             return {
                 "has_image": True,
@@ -329,13 +352,13 @@ class CropVisionPipeline:
         escalation_note = None
 
         if needs_escalation:
-            # Attempt 1: Call AWS Bedrock Multimodal VLM (Claude-3.5-Sonnet)
+            # Attempt 1: Call AWS Bedrock Multimodal VLM (Ministral-8B)
             bedrock_result = self._invoke_bedrock_teacher_vlm(image_path, pred_crop)
             if bedrock_result and bedrock_result.get("success"):
-                teacher_model = "Claude-3.5-Sonnet (AWS Bedrock)"
+                teacher_model = f"{self.bedrock_model_id} (AWS Bedrock)"
                 is_independent_teacher = True
                 teacher_source = "AWS_BEDROCK_API"
-                escalation_note = "Multimodal teacher inference verified by AWS Bedrock Claude 3.5 Sonnet."
+                escalation_note = "Multimodal teacher inference verified by AWS Bedrock Ministral 8B."
                 final_crop = bedrock_result.get("crop", pred_crop)
                 final_stage = bedrock_result.get("stage", pred_stage)
                 final_conf = bedrock_result.get("confidence", 0.95)
@@ -346,7 +369,7 @@ class CropVisionPipeline:
                 is_independent_teacher = False
                 teacher_source = "LOCAL_MODEL_TTA_FALLBACK"
                 escalation_note = (
-                    "AWS Bedrock Claude unavailable or offline; executed local multi-scale Test-Time Augmentation (TTA) "
+                    "AWS Bedrock Ministral unavailable or offline; executed local multi-scale Test-Time Augmentation (TTA) "
                     "with temperature-scaled ensemble over MobileNetV3 as fallback (not an independent teacher model)."
                 )
                 if simulate_ood:
@@ -386,13 +409,17 @@ class CropVisionPipeline:
         }
 
     def _invoke_bedrock_teacher_vlm(self, image_path: str, student_pred_crop: str) -> Optional[Dict[str, Any]]:
-        """Invokes AWS Bedrock Claude 3.5 Sonnet Vision on the actual image."""
+        """Invokes the organizer-approved Ministral teacher through Converse."""
         if not self.bedrock_client:
             return None
 
         try:
-            with open(image_path, "rb") as f:
-                img_b64 = base64.b64encode(f.read()).decode("utf-8")
+            from io import BytesIO
+            with Image.open(image_path) as source:
+                image = source.convert("RGB")
+                image.thumbnail((1568, 1568))
+                image_buffer = BytesIO()
+                image.save(image_buffer, format="JPEG", quality=85)
 
             prompt = (
                 f"You are the Lead Agronomist and Multimodal Crop Vision Model for Tamil Nadu, India. "
@@ -404,37 +431,31 @@ class CropVisionPipeline:
                 f'{{"crop": "string", "growth_stage": "string", "confidence": 0.95, "features": "string"}}'
             )
 
-            body = json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 200,
-                "temperature": 0.1,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64}},
-                            {"type": "text", "text": prompt}
-                        ]
-                    }
-                ]
-            })
-
-            resp = self.bedrock_client.invoke_model(
-                modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
-                body=body
+            validate_model(self.bedrock_model_id, text_only=True)
+            resp = self.bedrock_client.converse(
+                modelId=self.bedrock_model_id,
+                messages=[{"role": "user", "content": [
+                    {"image": {"format": "jpeg", "source": {"bytes": image_buffer.getvalue()}}},
+                    {"text": prompt}
+                ]}],
+                inferenceConfig={"maxTokens": 250, "temperature": 0.1}
             )
-            raw_body = json.loads(resp["body"].read())
-            txt = raw_body["content"][0]["text"].strip()
+            txt = "".join(b.get("text", "") for b in resp.get("output", {}).get("message", {}).get("content", [])).strip()
             
             # Extract JSON block
             if "{" in txt and "}" in txt:
                 json_str = txt[txt.find("{"):txt.rfind("}")+1]
                 data = json.loads(json_str)
+                if data.get("crop") not in self.crop_classes or data.get("growth_stage") not in self.stage_classes:
+                    return None
+                confidence = float(data.get("confidence", -1))
+                if not 0.0 <= confidence <= 1.0:
+                    return None
                 return {
                     "success": True,
-                    "crop": data.get("crop", student_pred_crop),
-                    "stage": data.get("growth_stage", "full_growth"),
-                    "confidence": float(data.get("confidence", 0.96))
+                    "crop": data["crop"],
+                    "stage": data["growth_stage"],
+                    "confidence": float(data["confidence"])
                 }
         except Exception as e:
             # Bedrock client offline or credentials expired; fall through to local teacher ensemble

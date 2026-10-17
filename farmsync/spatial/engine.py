@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 import geopandas as gpd
 from shapely.geometry import shape, mapping
 from typing import Dict, Any, Optional, List
@@ -38,6 +39,9 @@ class SpatialEngine:
         # Clean survey numbers index
         self.gdf_parcels_utm["survey_no_clean"] = self.gdf_parcels_utm["survey_no"].astype(str).str.strip()
         self.gdf_parcels_wgs84["survey_no_clean"] = self.gdf_parcels_wgs84["survey_no"].astype(str).str.strip()
+        identities = [self.feature_id(row) for _, row in self.gdf_parcels_wgs84.iterrows()]
+        self.gdf_parcels_wgs84["parcel_id"] = identities
+        self.gdf_parcels_utm["parcel_id"] = identities
 
         # Load and project Field Measurement Book (FMB) subdivision layer
         if os.path.exists(self.fmb_path):
@@ -58,6 +62,13 @@ class SpatialEngine:
         """Returns sorted list of all unique survey numbers."""
         return sorted(list(self.gdf_parcels_wgs84["survey_no_clean"].dropna().unique()))
 
+    @staticmethod
+    def feature_id(row):
+        identity = {key: str(row.get(key, "")) for key in ("dist_name", "taluk_name", "vil_name", "unit_id", "block_id", "survey_no")}
+        identity["geometry"] = mapping(row.geometry)
+        digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:24]
+        return "cad:" + digest
+
     def get_parcel(self, survey_no: str) -> Optional[Dict[str, Any]]:
         """
         Retrieves parcel attributes, exact GIS area in acres, and centroid coordinates.
@@ -72,6 +83,23 @@ class SpatialEngine:
           which would produce erroneous area and boundary conclusions.
         """
         clean_no = str(survey_no).strip()
+        if clean_no.startswith("cad:"):
+            matches = self.gdf_parcels_wgs84[self.gdf_parcels_wgs84["parcel_id"] == clean_no]
+            if len(matches) != 1:
+                return None
+            row = matches.iloc[0]
+            projected = self.gdf_parcels_utm[self.gdf_parcels_utm["parcel_id"] == clean_no].iloc[0]
+            area = float(projected.geometry.area)
+            center = row.geometry.centroid
+            return {
+                "parcel_id": clean_no, "survey_no": str(row["survey_no_clean"]),
+                "parent_survey_no": str(row["survey_no_clean"]), "sub_div": None, "is_subdivision": False,
+                "district": str(row.get("dist_name", "")), "taluk": str(row.get("taluk_name", "")),
+                "village": str(row.get("vil_name", "")), "unit_id": str(row.get("unit_id", "")), "block_id": str(row.get("block_id", "")),
+                "area_sq_meters": round(area, 2), "area_acres": round(area / 4046.8564224, 3),
+                "centroid": {"latitude": round(float(center.y), 6), "longitude": round(float(center.x), 6)},
+                "geometry_geojson": mapping(row.geometry), "gis_source": "Park_Cadastral_Map.geojson"
+            }
         is_subdivision_query = any(sep in clean_no for sep in ["/", "-", "_"])
 
         if is_subdivision_query:
@@ -83,7 +111,7 @@ class SpatialEngine:
                 matches_fmb_utm = self.gdf_fmb_utm[self.gdf_fmb_utm["kide_clean"] == norm_kide]
                 matches_fmb_wgs = self.gdf_fmb_wgs84[self.gdf_fmb_wgs84["kide_clean"] == norm_kide]
                 
-                if not matches_fmb_utm.empty:
+                if len(matches_fmb_utm) == 1:
                     p_utm = matches_fmb_utm.iloc[0]
                     p_wgs = matches_fmb_wgs.iloc[0]
                     
@@ -120,7 +148,8 @@ class SpatialEngine:
         matches_utm = self.gdf_parcels_utm[self.gdf_parcels_utm["survey_no_clean"] == clean_no]
         matches_wgs = self.gdf_parcels_wgs84[self.gdf_parcels_wgs84["survey_no_clean"] == clean_no]
         
-        if matches_utm.empty:
+        # Survey numbers repeat across villages/blocks. Never choose an arbitrary row.
+        if len(matches_utm) != 1:
             return None
         
         p_utm = matches_utm.iloc[0]
@@ -138,6 +167,7 @@ class SpatialEngine:
                 available_subdivs = sorted(list(fmb_matches["kide_clean"].unique()))
 
         return {
+            "parcel_id": str(p_wgs["parcel_id"]),
             "survey_no": clean_no,
             "parent_survey_no": clean_no,
             "sub_div": None,
@@ -183,12 +213,13 @@ class SpatialEngine:
         source_layer = None
         if is_subdiv and self.gdf_fmb_utm is not None:
             matches_fmb = self.gdf_fmb_utm[self.gdf_fmb_utm["kide_clean"] == norm_kide]
-            if not matches_fmb.empty:
+            if len(matches_fmb) == 1:
                 geom = matches_fmb.iloc[0].geometry
                 source_layer = "Park_fmb_Map (Field Measurement Book Subdivision)"
         elif not is_subdiv and hasattr(self, 'gdf_parcels_utm'):
-            matches_cad = self.gdf_parcels_utm[self.gdf_parcels_utm["survey_no_clean"] == clean_no]
-            if not matches_cad.empty:
+            column = "parcel_id" if clean_no.startswith("cad:") else "survey_no_clean"
+            matches_cad = self.gdf_parcels_utm[self.gdf_parcels_utm[column] == clean_no]
+            if len(matches_cad) == 1:
                 geom = matches_cad.iloc[0].geometry
                 source_layer = "Park_Cadastral_Map (Cadastral Parcel)"
 

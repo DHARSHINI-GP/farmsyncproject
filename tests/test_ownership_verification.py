@@ -331,8 +331,10 @@ def test_demonstration_match_is_not_official_verification(extractor, orchestrato
     # FTS trust metrics do not count demo registry as authoritative registry evidence (coverage = 2/3 = 0.67)
     trust_metrics = vobj["trust_metrics"]
     breakdown = trust_metrics["signal_breakdown"]
-    assert breakdown["evidence_coverage"] == 0.67
-    assert trust_metrics["verification_status"] == "VERIFIED_ACCEPT"
+    # Only the document is usable: the photo is outside the parcel, and the
+    # bundled registry is not authoritative ownership evidence.
+    assert breakdown["evidence_coverage"] == 0.33
+    assert trust_metrics["verification_status"] == "VERIFIED_ABSTAIN"
 
 
 

@@ -109,6 +109,7 @@ class EvidenceGraphBuilder:
             },
             {
                 "source_type": "FIELD_PHOTOGRAPH",
+                "parcel_location_verified": vision_result.get("photo_association_verified", False),
                 "source_ref": vision_result.get("image_filename"),
                 "extracted_crop": crop_name,
                 "confidence": vision_result.get("final_confidence") if has_photo else 0.0,
@@ -154,6 +155,7 @@ class EvidenceGraphBuilder:
                 "documented_area_acres": doc_claims.get("claimed_extent_acres"),
                 "extent_difference_pct": registry_check.get("extent_diff_pct"),
                 "predicted_crop": crop_name,
+                "photo_association_verified": vision_result.get("photo_association_verified", False),
                 "growth_stage": crop_stage,
                 "land_classification": doc_claims.get("land_classification") or registry_check.get("land_classification", "Agricultural"),
                 "document_found": doc_found,

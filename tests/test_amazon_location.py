@@ -65,7 +65,9 @@ class TestStatus:
     def test_status_with_aws(self, engine_with_mock_aws):
         status = engine_with_mock_aws.get_status()
         assert status["aws_credentials_available"] is True
-        assert status["connected"] is True
+        assert status["client_initialized"] is True
+        assert status["connected"] is False
+        assert status["connection_verified"] is False
         assert "ap-south-1" in status["tier"]
 
     def test_tls_verification_enabled(self, engine_no_aws):

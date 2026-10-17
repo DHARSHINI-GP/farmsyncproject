@@ -11,22 +11,22 @@ def orchestrator():
     return FarmSyncOrchestrator()
 
 def test_confident_multimodal_workflow(orchestrator):
-    """Case 1: Standard Multimodal Request (Confident Path -> ACCEPT)"""
+    """Bundled photo coordinates do not match this parcel; refuse association."""
     query = "Using the supplied land document and field photograph for Keelathattaparai village, identify Survey Number 384, verify parcel and owner, predict crop and growth stage, and return verified recommendation."
     res = orchestrator.execute_request(query)
     vobj = res["verified_result_object"]
 
-    assert vobj["trust_metrics"]["verification_status"] == "VERIFIED_ACCEPT"
-    assert vobj["trust_metrics"]["task_trust_score_fts"] >= 0.85
-    assert vobj["trust_metrics"]["signal_breakdown"]["evidence_coverage"] == 0.67
-    assert vobj["trust_metrics"]["signal_breakdown"]["conflict_penalty"] == 0.0
+    assert vobj["trust_metrics"]["verification_status"] == "VERIFIED_ABSTAIN"
+    assert vobj["trust_metrics"]["task_trust_score_fts"] < 0.70
+    assert vobj["trust_metrics"]["signal_breakdown"]["evidence_coverage"] == 0.33
+    assert vobj["trust_metrics"]["signal_breakdown"]["conflict_penalty"] == 0.25
     assert vobj["extracted_attributes"]["ownership_verified"] is False
     assert vobj["extracted_attributes"]["ownership_status"] == "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION"
     assert vobj["extracted_attributes"]["demo_record_matched"] is True
     assert vobj["extracted_attributes"]["is_authoritative_government_record"] is False
     assert vobj["extracted_attributes"]["parcel_geometry_verified"] is True
-    assert vobj["extracted_attributes"]["predicted_crop"] == "Coconut"
-    assert vobj["extracted_attributes"]["growth_stage"] == "full_growth"
+    assert vobj["extracted_attributes"]["predicted_crop"] is None
+    assert vobj["extracted_attributes"]["growth_stage"] is None
     assert res["baseline_comparison"]["FARMSYNC"]["cost_savings_vs_premium_pct"] >= 80.0
     
     # Assert DAG execution state
@@ -37,20 +37,29 @@ def test_confident_multimodal_workflow(orchestrator):
         assert task["status"] == "COMPLETED"
         assert task["has_result"] is True
 
-def test_low_confidence_teacher_escalation(orchestrator):
+def test_low_confidence_teacher_escalation(orchestrator, monkeypatch):
     """Case 2: Low-Confidence Perception -> Automatic Escalation to Teacher VLM"""
     query = "Using the supplied land document and field photograph for Keelathattaparai village, identify Survey Number 384, verify parcel and owner, predict crop and growth stage, and return verified recommendation."
+    # Controlled aligned-photo scenario to test escalation independently of the
+    # bundled datasets, whose matching survey numbers do not imply co-location.
+    lookup = orchestrator.vision.get_image_for_survey
+    monkeypatch.setattr(orchestrator.vision, "get_image_for_survey", lambda survey, parcel=None: lookup(survey))
     res = orchestrator.execute_request(query, force_escalate_vision=True)
     vobj = res["verified_result_object"]
 
     assert vobj["trust_metrics"]["verification_status"] == "VERIFIED_ACCEPT"
-    assert "Claude-3.5-Sonnet-Teacher" in vobj["routing_telemetry"]["steps"][3]["model_or_tool"]
+    vision_step = next(s for s in vobj["routing_telemetry"]["steps"] if "has_image" in s)
+    assert vision_step["planned_route"] == "Bedrock-Ministral-8B-Teacher"
+    photo = next(s for s in vobj["source_evidence"] if s["source_type"] == "FIELD_PHOTOGRAPH")
+    assert vision_step["model_or_tool"] == photo["perception_model"]
+    if not vision_step["is_independent_teacher"]:
+        assert "Claude" not in vision_step["model_or_tool"]
     
     # Check Task 5 Multimodal Escalation Check
     task_5 = next(t for t in res["executed_dag"]["subtasks"] if t["id"] == "task_5")
     assert task_5["id"] == "task_5"
     assert task_5["status"] == "COMPLETED"
-    assert "Claude-3.5-Sonnet-Teacher" in task_5["selected_route"]
+    assert "Bedrock-Ministral-8B-Teacher" in task_5["selected_route"]
 
 def test_injected_conflict_abstention(orchestrator):
     """Case 3: Injected Document-Registry Conflict -> Refuse-to-Invent ABSTAIN / Human Review"""
@@ -135,7 +144,8 @@ def main():
     test_confident_multimodal_workflow(orch)
     print("Case 1 passed!")
     print("\n--- Test Case 2: Low-Confidence Vision -> Teacher Escalation ---")
-    test_low_confidence_teacher_escalation(orch)
+    with pytest.MonkeyPatch.context() as patcher:
+        test_low_confidence_teacher_escalation(orch, patcher)
     print("Case 2 passed!")
     print("\n--- Test Case 3: Injected Conflict -> ABSTAIN / Human Review ---")
     test_injected_conflict_abstention(orch)

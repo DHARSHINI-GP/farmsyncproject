@@ -14,6 +14,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <!-- Marked for Markdown Rendering in AI responses -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
   
   <!-- Google Fonts: Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -131,9 +132,9 @@
         <!-- Amazon Location Service Status Pill -->
         <div class="hidden xl:flex items-center space-x-1.5 bg-blue-50 text-blue-800 px-3 py-1.5 rounded-full border border-blue-200 text-xs font-medium">
           <i data-lucide="map-pin" class="w-3.5 h-3.5 text-blue-600"></i>
-          <span>Amazon Location Service</span>
+          <span id="locationStatusText">Local GIS & logistics</span>
           <span class="text-slate-300">·</span>
-          <span class="font-bold text-blue-900">ap-south-1</span>
+          <span class="font-bold text-blue-900">UTM 44N</span>
         </div>
 
         <!-- Notification Bell -->
@@ -156,10 +157,10 @@
     </header>
 
     <!-- MAIN BODY: SPLIT VIEW -->
-    <div class="flex-1 flex overflow-hidden relative">
+    <div class="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden relative">
 
       <!-- LEFT SIDEBAR: MASTER CONTROLS & PARCEL TABLE -->
-      <aside class="w-full md:w-[460px] lg:w-[480px] border-r border-slate-200/80 bg-white flex flex-col shrink-0 z-10">
+      <aside class="w-full h-[35vh] md:h-auto md:w-[460px] lg:w-[480px] border-r border-slate-200/80 bg-white flex flex-col shrink-0 z-10">
         
         <!-- Sidebar Top Header & Primary Action -->
         <div class="p-4 border-b border-slate-100">
@@ -169,7 +170,7 @@
                 <span>Cadastral Parcels</span>
                 <span id="loadedParcelsCountBadge" class="bg-brand-50 text-brand-700 text-[11px] px-2 py-0.5 rounded-full font-bold">396 Live</span>
               </h2>
-              <p class="text-[11px] text-slate-400">Keelathattaparai Village · Thoothukudi</p>
+              <p class="text-[11px] text-slate-400">Seven villages · Thoothukudi study area</p>
             </div>
             <button onclick="triggerVerification()" id="runBtn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-brand-500/20 transition active:scale-95">
               <i data-lucide="play" class="w-3.5 h-3.5 fill-white"></i>
@@ -238,13 +239,13 @@
       </aside>
 
       <!-- RIGHT PANEL: FULL MAP CANVAS & AI COPILOT HUD -->
-      <main class="flex-1 relative flex flex-col bg-slate-100 overflow-hidden">
+      <main class="flex-1 min-h-[750px] md:min-h-0 relative flex flex-col bg-slate-100 overflow-hidden">
         
         <!-- The Interactive Leaflet Map Container -->
         <div id="map" class="w-full h-full z-0"></div>
 
         <!-- PROMINENT AI PROMPT BAR & COPILOT (Matches Reference Image 3) -->
-        <div class="absolute top-4 left-20 right-4 z-10 max-w-4xl mx-auto flex flex-col space-y-2 pointer-events-none">
+        <div class="absolute top-4 left-3 md:left-20 right-3 md:right-4 z-10 max-w-4xl mx-auto flex flex-col space-y-2 pointer-events-none">
           
           <!-- AI Input Box -->
           <div class="glass-card p-2 rounded-2xl shadow-xl border border-white/80 pointer-events-auto flex items-center space-x-2">
@@ -255,8 +256,8 @@
               type="text" 
               id="aiQueryInput" 
               onkeydown="if(event.key==='Enter') executeAiQuery()"
-              placeholder="Ask FARMSYNC AI (e.g. 'Inspect survey 384 and check crop health', 'Why is 176 flagged?', 'Check waterbody clearance')..." 
-              class="flex-1 bg-transparent border-0 px-2 text-xs md:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+              placeholder="Ask FARMSYNC AI (e.g. 'Inspect survey 384 and check crop and growth stage', 'Check waterbody clearance')..."
+              class="flex-1 min-w-0 bg-transparent border-0 px-2 text-xs md:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
             />
             <button onclick="executeAiQuery()" id="aiSubmitBtn" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95 shrink-0">
               <span>Ask AI</span>
@@ -280,6 +281,12 @@
               <input type="file" id="pdfUploadInput" accept=".pdf" class="hidden" onchange="uploadCustomPdf(this)">
             </div>
 
+            <div class="glass-card px-3 py-1.5 rounded-full border border-white/80 shadow-md flex items-center space-x-1.5 shrink-0 text-xs">
+              <label for="photoSelectDropdown" class="font-bold text-slate-700 text-[10px]">PHOTO:</label>
+              <select id="photoSelectDropdown" class="bg-transparent text-xs max-w-[180px]">
+                <option value="">Spatially matched photo only</option>
+              </select>
+            </div>
             <!-- Quick Suggestion Prompt Chips -->
             <button onclick="quickPrompt('Audit Survey 1/3B against Unit 9 Gazette (36_Ex_VI_1_2025__1___1_.pdf)')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
               <span class="text-emerald-600 font-bold">✓</span>
@@ -297,7 +304,7 @@
               <span class="text-amber-500 font-bold">⚠</span>
               <span>Survey 176 Conflict</span>
             </button>
-            <button onclick="quickPrompt('Inspect Survey 384 and verify crop health')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
+            <button onclick="quickPrompt('Inspect Survey 384 and verify crop and growth stage')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
               <span class="text-brand-600 font-bold">⚡</span>
               <span>Inspect Survey 384</span>
             </button>
@@ -334,17 +341,17 @@
         <div class="absolute bottom-4 left-6 z-10 glass-card px-4 py-2 rounded-full shadow-lg border border-white/70 flex items-center space-x-4 text-xs font-semibold text-slate-700">
           <div class="flex items-center space-x-1.5">
             <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-            <span>Verified (394)</span>
+            <span>Verified</span>
           </div>
           <span class="text-slate-300">|</span>
           <div class="flex items-center space-x-1.5">
             <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-            <span>Caution (Survey 382)</span>
+            <span>Caution</span>
           </div>
           <span class="text-slate-300">|</span>
           <div class="flex items-center space-x-1.5">
             <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-            <span>Discrepancy (Survey 176)</span>
+            <span>Discrepancy</span>
           </div>
           <span class="text-slate-300">|</span>
           <div class="flex items-center space-x-1.5">
@@ -354,7 +361,7 @@
         </div>
 
         <!-- FLOATING SLIDE-OVER INSPECTION DRAWER (Bottom Right) -->
-        <div id="detailDrawer" class="absolute bottom-4 right-4 w-[430px] max-h-[80vh] glass-card rounded-3xl shadow-2xl border border-white/80 flex flex-col overflow-hidden z-20 transition-all duration-300">
+        <div id="detailDrawer" class="absolute bottom-4 right-3 md:right-4 w-[calc(100%-24px)] md:w-[430px] max-h-[60vh] md:max-h-[calc(100%_-_144px)] glass-card rounded-3xl shadow-2xl border border-white/80 flex flex-col overflow-hidden z-20 transition-all duration-300">
           
           <!-- Drawer Header -->
           <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between bg-white/70">
@@ -364,12 +371,12 @@
               </div>
               <div>
                 <h3 id="drawerTitle" class="text-xs md:text-sm font-bold text-slate-900 leading-none">Survey 384 Inspection</h3>
-                <span id="drawerSubtitle" class="text-[10px] text-slate-400">10.35 Acres · Keelathattaparai</span>
+                <span id="drawerSubtitle" class="text-[10px] text-slate-400">Loading parcel geometry</span>
               </div>
             </div>
             
             <div class="flex items-center space-x-2">
-              <span id="drawerDecisionBadge" class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800">ACCEPT</span>
+              <span id="drawerDecisionBadge" class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-100 text-slate-700">NOT AUDITED</span>
               <button onclick="toggleDrawer()" class="w-7 h-7 rounded-lg hover:bg-slate-200/50 flex items-center justify-center text-slate-400 hover:text-slate-700 transition">
                 <i data-lucide="chevron-down" class="w-4 h-4" id="drawerChevron"></i>
               </button>
@@ -386,7 +393,7 @@
                   <i data-lucide="bot" class="w-4 h-4 text-brand-600"></i>
                   <span id="aiModelBadgeText">AI Model Reasoning</span>
                 </span>
-                <span id="aiLatencyBadge" class="bg-brand-100 text-brand-800 font-mono text-[10px] px-2 py-0.5 rounded-md">274ms · ap-south-1</span>
+                <span id="aiLatencyBadge" class="bg-brand-100 text-brand-800 font-mono text-[10px] px-2 py-0.5 rounded-md">Not run</span>
               </div>
               
               <!-- Markdown Content from AI Engine -->
@@ -397,15 +404,10 @@
               <!-- Collapsible Chain-of-Thought Steps -->
               <details class="pt-1 border-t border-brand-200/40 text-[11px] cursor-pointer" open>
                 <summary class="font-bold text-brand-900 hover:text-brand-700 mb-1.5 flex items-center space-x-1">
-                  <span>Chain-of-Thought Reasoning Steps:</span>
+                  <span>Execution summary:</span>
                 </summary>
                 <div id="aiThoughtStepsList" class="space-y-1 pl-2 text-[10px] text-slate-600 font-mono">
-                  <div>1. Entity Extraction: Target parcel Survey 384</div>
-                  <div>2. PostGIS: Area 10.35 ac (UTM 44N)</div>
-                  <div>3. OCR Verification: Ownership match verified</div>
-                  <div>4. Multimodal Vision: Crop classification</div>
-                  <div>5. RAG Advisory: Package of practices</div>
-                  <div>6. Trust Synthesis: FTS = 0.884</div>
+                  <div>Run verification to inspect the evidence and tool execution.</div>
                 </div>
               </details>
             </div>
@@ -417,11 +419,11 @@
                   <i data-lucide="camera" class="w-3.5 h-3.5 text-brand-600"></i>
                   <span>Field Ground Photograph</span>
                 </span>
-                <span id="photoBadge" class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md text-[10px]">Coconut · full_growth</span>
+                <span id="photoBadge" class="bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-md text-[10px]">Not analyzed</span>
               </div>
               <div class="w-full h-32 bg-slate-100 rounded-xl overflow-hidden relative border border-slate-200 flex items-center justify-center">
-                <img id="fieldPhotoImg" src="" alt="Field Photo" class="w-full h-full object-cover">
-                <div id="noPhotoPlaceholder" class="hidden flex flex-col items-center justify-center text-slate-500 p-3 text-center">
+                <img id="fieldPhotoImg" alt="Field Photo" class="hidden w-full h-full object-cover">
+                <div id="noPhotoPlaceholder" class="flex flex-col items-center justify-center text-slate-500 p-3 text-center">
                   <i data-lucide="camera-off" class="w-5 h-5 text-slate-400 mb-1"></i>
                   <span class="text-[11px] font-semibold text-slate-700">No Mobile Photo on Record</span>
                   <span class="text-[9px] text-slate-400">Refuse-to-Substitute: Zero fake image placeholders</span>
@@ -437,9 +439,9 @@
               <div class="flex items-center justify-between">
                 <span class="font-bold text-slate-800 flex items-center space-x-1.5">
                   <i data-lucide="map-pin" class="w-3.5 h-3.5 text-blue-600"></i>
-                  <span>Amazon Location Service</span>
+                  <span>Location & logistics</span>
                 </span>
-                <span id="locServiceSourceBadge" class="text-[9px] bg-blue-100 text-blue-800 font-mono px-2 py-0.5 rounded font-bold">AWS ap-south-1</span>
+                <span id="locServiceSourceBadge" class="text-[9px] bg-blue-100 text-blue-800 font-mono px-2 py-0.5 rounded font-bold">LOCAL GIS</span>
               </div>
 
               <!-- Reverse Geocoded Address -->
@@ -450,7 +452,7 @@
                 </div>
                 <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-100">
                   <span>Taluk: <b id="talukText" class="text-slate-700">Thoothukudi</b></span>
-                  <span>Geofence: <b id="geofenceStatusText" class="text-emerald-600">COMPLIANT</b></span>
+                  <span>Geofence: <b id="geofenceStatusText" class="text-slate-600">Not checked</b></span>
                 </div>
               </div>
 
@@ -458,7 +460,7 @@
               <div class="bg-white p-2.5 rounded-xl border border-slate-100 space-y-1.5">
                 <div class="flex items-center justify-between">
                   <span class="text-[10px] text-slate-500 font-medium">Ag-Logistics Supply Route:</span>
-                  <span id="routeMetricBadge" class="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">6.3 km · 14 mins</span>
+                  <span id="routeMetricBadge" class="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">Not calculated</span>
                 </div>
                 <button onclick="calculateAndDisplayRoute()" id="routeBtn" class="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-sm active:scale-95">
                   <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
@@ -477,7 +479,7 @@
                   <i data-lucide="file-check-2" class="w-3.5 h-3.5 text-amber-600"></i>
                   <span>Land Acquisition Notice Claim</span>
                 </span>
-                <span id="docStatusBadge" class="text-[9px] bg-amber-100 text-amber-900 font-mono px-2 py-0.5 rounded font-bold">PDF Table Extracted</span>
+                <span id="docStatusBadge" class="text-[9px] bg-amber-100 text-amber-900 font-mono px-2 py-0.5 rounded font-bold">Not audited</span>
               </div>
 
               <div class="bg-white p-2.5 rounded-xl border border-slate-100 text-[11px] space-y-1.5">
@@ -487,15 +489,15 @@
                 </div>
                 <div class="flex items-center justify-between">
                   <span class="text-slate-500">Pattadar / Claimant:</span>
-                  <span id="docOwnerText" class="font-bold text-slate-900 truncate max-w-[190px]">Pearl Manisha Infra Structure</span>
+                  <span id="docOwnerText" class="font-bold text-slate-900 truncate max-w-[190px]">Not audited</span>
                 </div>
                 <div class="flex items-center justify-between">
                   <span class="text-slate-500">Notice Gazette Stage:</span>
-                  <span id="docStageText" class="font-medium text-slate-800">Section 3(1) Gazette</span>
+                  <span id="docStageText" class="font-medium text-slate-800">Not audited</span>
                 </div>
                 <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px]">
-                  <span>Claimed Extent: <b id="docClaimedExtentText" class="text-slate-800">1.00 ac</b></span>
-                  <span>Discrepancy: <b id="docVarianceText" class="text-emerald-600">0.0% (MATCH)</b></span>
+                  <span>Claimed Extent: <b id="docClaimedExtentText" class="text-slate-800">Not audited</b></span>
+                  <span>Discrepancy: <b id="docVarianceText" class="text-slate-600">Not audited</b></span>
                 </div>
               </div>
             </div>
@@ -547,7 +549,7 @@
             <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 space-y-2">
               <div class="flex items-center justify-between">
                 <span class="font-bold text-slate-800">Trust Score (FTS)</span>
-                <span id="ftsValueText" class="font-extrabold text-brand-600 text-xs">0.884 / 1.0</span>
+                <span id="ftsValueText" class="font-extrabold text-brand-600 text-xs">Not run</span>
               </div>
               <div id="traceSteps" class="space-y-1 text-[10px] font-mono">
                 <!-- Dynamically populated trace steps -->
@@ -571,8 +573,8 @@
             <i data-lucide="cloud" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="font-bold text-slate-900 text-sm">AWS Bedrock Configuration</h3>
-            <p class="text-[11px] text-slate-400">Region: ap-south-1 (Mumbai) · Account: 9271-6111-4491</p>
+            <h3 class="font-bold text-slate-900 text-sm">Cloud service status</h3>
+            <p class="text-[11px] text-slate-400">AWS configuration · Default region: ap-south-1 (Mumbai)</p>
           </div>
         </div>
         <button onclick="closeAwsModal()" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400">
@@ -581,45 +583,79 @@
       </div>
 
       <p class="text-xs text-slate-600 leading-relaxed">
-        Paste your temporary AWS CLI credentials from the AWS Access Portal (Identity Center SSO) to enable direct cloud foundation model calls.
+        AI runs through the server's configured AWS identity in Mumbai. The approved models are Ministral 3B, Ministral 8B, and Titan embeddings. Cloud geocoding and road routing use the separately assigned Location role; parcel buffer checks use local GIS.
       </p>
 
       <div class="space-y-3 text-xs">
         <div>
-          <label class="font-semibold text-slate-700 block mb-1">AWS Access Key ID</label>
-          <input type="text" id="awsKeyId" placeholder="ASIA..." class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs focus:ring-2 focus:ring-brand-500/20 focus:outline-none">
+          <div id="cloudChecksList" class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2 text-slate-700">Live services have not been checked.</div>
         </div>
         <div>
-          <label class="font-semibold text-slate-700 block mb-1">AWS Secret Access Key</label>
-          <input type="password" id="awsSecretKey" placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs focus:ring-2 focus:ring-brand-500/20 focus:outline-none">
+          <button onclick="runCloudChecks()" id="cloudCheckBtn" class="w-full p-2 rounded-xl bg-slate-900 text-white font-semibold">Check live AI services</button>
+          <p class="text-[10px] text-slate-500 mt-1">Runs a small test of each approved model. Model usage charges may apply.</p>
         </div>
         <div>
-          <label class="font-semibold text-slate-700 block mb-1">AWS Session Token (SSO / IAM Identity Center)</label>
-          <textarea id="awsSessionToken" rows="3" placeholder="IQoJb3JpZ2luX2VjE..." class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[10px] focus:ring-2 focus:ring-brand-500/20 focus:outline-none"></textarea>
+          <p class="text-[11px] text-slate-500">AWS sessions are managed on the server. If access expires, the operator must refresh the assigned Builder session.</p>
         </div>
         <div>
-          <label class="font-semibold text-slate-700 block mb-1">Model ID</label>
-          <select id="awsModelId" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono">
-            <option value="mistral.ministral-3b-instruct">mistral.ministral-3b-instruct (274ms latency - Mumbai)</option>
-            <option value="anthropic.claude-3-5-sonnet-20241022-v2:0">anthropic.claude-3-5-sonnet (High Reasoning)</option>
-            <option value="amazon.titan-text-express-v1">amazon.titan-text-express-v1</option>
-          </select>
+          <div class="text-[11px] text-slate-500">Credential source: SSO profile, server environment or deployment role.</div>
         </div>
         <div>
-          <label class="font-semibold text-slate-700 block mb-1">FARMSYNC API Key (Required for remote network access)</label>
+          <label class="font-semibold text-slate-700 block mb-1">Application access key (if required)</label>
           <input type="password" id="farmsyncApiKey" placeholder="Enter FARMSYNC_API_KEY if server is remote" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs focus:ring-2 focus:ring-brand-500/20 focus:outline-none">
         </div>
       </div>
 
       <div class="pt-2 flex items-center justify-end space-x-2 border-t border-slate-100">
         <button onclick="closeAwsModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">Cancel</button>
-        <button onclick="saveAwsSettings()" id="saveAwsBtn" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20 transition">Save & Connect</button>
+        <button onclick="saveAwsSettings()" id="saveAwsBtn" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20 transition">Save access key</button>
       </div>
     </div>
   </div>
 
   <!-- APPLICATION JAVASCRIPT -->
   <script>
+    // Add credentials consistently, and surface API failures before rendering results.
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (input, options = {}) => {
+      const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+      if (url.origin === location.origin && url.pathname.startsWith('/api/')) {
+        const headers = new Headers(options.headers);
+        const key = localStorage.getItem('farmsync_api_key');
+        if (key) headers.set('X-API-Key', key);
+        options = { ...options, headers };
+      }
+      const response = await nativeFetch(input, options);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(typeof body.detail === 'string' ? body.detail : `Request failed (${response.status})`);
+      }
+      return response;
+    };
+    function escapeHtml(value) {
+      const element = document.createElement('span');
+      element.textContent = String(value ?? '');
+      return element.innerHTML;
+    }
+    function resetAuditDisplay() {
+      document.getElementById('aiSubmitBtn').disabled = false;
+      document.getElementById('aiSubmitBtn').textContent = 'Ask AI';
+      for (const id of ['docOwnerText', 'docStageText', 'docClaimedExtentText', 'docVarianceText', 'docAreaText', 'docStatusBadge', 'ftsValueText']) {
+        document.getElementById(id).textContent = 'Not audited';
+      }
+      document.getElementById('drawerDecisionBadge').textContent = 'NOT AUDITED';
+      document.getElementById('drawerDecisionBadge').className = 'px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-100 text-slate-700';
+      document.getElementById('aiAnswerContent').textContent = 'Run verification for this parcel.';
+      document.getElementById('aiThoughtStepsList').textContent = '';
+      document.getElementById('traceSteps').textContent = '';
+      document.getElementById('aiLatencyBadge').textContent = 'Not run';
+      document.getElementById('photoBadge').textContent = 'Not analyzed';
+      document.getElementById('fieldPhotoImg').classList.add('hidden');
+      document.getElementById('noPhotoPlaceholder').classList.remove('hidden');
+      document.getElementById('advisoryBody').textContent = 'Run verification to retrieve guidance for the observed crop and stage.';
+      document.getElementById('advisoryCitation').textContent = 'Not retrieved';
+      document.getElementById('routeMetricBadge').textContent = 'Not calculated';
+    }
     let map;
     let allParcelsGeoJsonLayer;
     let activePolygonLayer;
@@ -637,13 +673,20 @@
 
     let allParcelsList = [];
     let currentSurvey = "384";
+    let initialParcelReady = false;
+    let currentParcelId = null;
+    let activePhotoUrl = null;
+    let auditRequestId = 0;
 
     document.addEventListener("DOMContentLoaded", () => {
       lucide.createIcons();
       initMap();
+      document.getElementById('aiSubmitBtn').disabled = true;
       loadAllParcelsData();
       checkAwsStatus();
+      checkLocationStatus();
       loadAvailableDocuments();
+      loadAvailablePhotos();
     });
 
     function initMap() {
@@ -702,6 +745,7 @@
             const p = f.properties;
             return {
               survey_no: String(p.survey_no),
+              parcel_id: p.parcel_id,
               name: `Survey ${p.survey_no} - Block ${p.block_id || '1'}`,
               village: p.vil_name || 'Keelathattaparai',
               district: p.dist_name || 'Thoothukudi',
@@ -715,6 +759,7 @@
           });
 
           document.getElementById('totalCount').innerText = allParcelsList.length;
+          document.getElementById('flaggedCount').innerText = allParcelsList.filter(p => p.badge === 'error' || p.badge === 'warning').length;
           document.getElementById('loadedParcelsCountBadge').innerText = `${allParcelsList.length} Live`;
           
           // Render Left Table
@@ -724,13 +769,13 @@
           renderParcelsOnMap(geoJsonData);
 
           // Auto-select first parcel (384)
-          selectParcel("384", false);
+          selectParcel("384", false, (allParcelsList.find(parcel => parcel.survey_no === '384') || {}).parcel_id || null);
         });
     }
 
     function getParcelStyle(feature) {
       const s = feature.properties.status;
-      const isSelected = String(feature.properties.survey_no) === String(currentSurvey);
+      const isSelected = currentParcelId ? feature.properties.parcel_id === currentParcelId : String(feature.properties.survey_no) === String(currentSurvey);
 
       let fillColor = '#27AE60';
       let strokeColor = '#166E3A';
@@ -789,7 +834,7 @@
 
           // Click to Select & Inspect
           layer.on('click', () => {
-            selectParcel(String(p.survey_no), true);
+            selectParcel(String(p.survey_no), true, p.parcel_id);
           });
         }
       }).addTo(map);
@@ -799,13 +844,13 @@
       const container = document.getElementById('parcelListContainer');
       container.innerHTML = '';
 
-      const subset = parcels.slice(0, 60); // Responsive render for first 60
+      const subset = parcels;
 
       subset.forEach(p => {
-        const isSelected = p.survey_no === currentSurvey;
+        const isSelected = currentParcelId ? p.parcel_id === currentParcelId : p.survey_no === currentSurvey;
         const row = document.createElement('div');
         row.className = `p-3 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition ${isSelected ? 'bg-brand-50/70 border-l-4 border-brand-600' : ''}`;
-        row.onclick = () => selectParcel(p.survey_no, true);
+        row.onclick = () => selectParcel(p.survey_no, true, p.parcel_id);
 
         const badgeColor = p.badge === 'error' ? 'bg-rose-100 text-rose-800' : 
                           (p.badge === 'warning' ? 'bg-amber-100 text-amber-800' : 
@@ -816,7 +861,7 @@
             <input type="checkbox" ${isSelected ? 'checked' : ''} class="rounded text-brand-600 pointer-events-none w-3.5 h-3.5">
             <div class="truncate">
               <div class="font-bold text-xs text-slate-900 truncate">${p.name}</div>
-              <div class="text-[10px] text-slate-400">${p.area_acres} ac · Keelathatta...</div>
+              <div class="text-[10px] text-slate-400">${p.area_acres} ac · ${escapeHtml(p.village)}</div>
             </div>
           </div>
           <div class="w-1/4 text-xs font-medium text-slate-600 truncate">${p.crop}</div>
@@ -834,8 +879,11 @@
       lucide.createIcons();
     }
 
-    function selectParcel(surveyNo, shouldFly = true) {
+    function selectParcel(surveyNo, shouldFly = true, parcelId = null) {
+      auditRequestId++;
       currentSurvey = String(surveyNo);
+      currentParcelId = parcelId;
+      resetAuditDisplay();
       document.getElementById('activeSurveyBadge').innerText = `Survey ${surveyNo}`;
       
       // Re-style map layer to highlight newly selected parcel
@@ -844,11 +892,15 @@
       }
 
       // Fetch parcel geometry and details
-      fetch(`/api/parcel/${surveyNo}`)
+      const parcelKey = parcelId || surveyNo;
+      fetch(`/api/parcel/${encodeURIComponent(parcelKey)}`)
         .then(r => r.json())
         .then(data => {
+          if (String(surveyNo) !== currentSurvey || parcelId !== currentParcelId) return;
           const p = data.parcel;
           const c = data.constraints;
+          initialParcelReady = true;
+          document.getElementById('aiSubmitBtn').disabled = false;
 
           // Remove standalone active polygon
           if (activePolygonLayer) {
@@ -873,7 +925,7 @@
           document.getElementById('drawerTitle').innerText = `Survey ${surveyNo} Inspection`;
           document.getElementById('drawerSubtitle').innerText = `${p.area_acres} Acres · ${p.village}`;
           document.getElementById('gisAreaText').innerText = `${p.area_acres} Acres`;
-          document.getElementById('docAreaText').innerText = `${p.area_acres} Acres`;
+          document.getElementById('docAreaText').innerText = 'Run document audit';
           document.getElementById('roadDistText').innerText = `${c.distance_to_road_meters} m`;
           document.getElementById('waterDistText').innerText = `${c.distance_to_waterbody_meters} m (${c.waterbody_buffer_conflict ? 'CONFLICT' : 'Safe'})`;
 
@@ -890,28 +942,35 @@
           document.getElementById('routeStepsDrawer').innerHTML = '';
 
           // Fetch Amazon Location Reverse Geocode
-          fetch(`/api/location/reverse-geocode/${surveyNo}`)
+          fetch(`/api/location/reverse-geocode/${encodeURIComponent(parcelKey)}`)
             .then(r => r.json())
             .then(loc => {
+              if (String(surveyNo) !== currentSurvey || parcelId !== currentParcelId) return;
               document.getElementById('reverseAddressText').innerText = loc.formatted_address;
               document.getElementById('talukText').innerText = loc.taluk || "Thoothukudi";
+              document.getElementById('locServiceSourceBadge').innerText = loc.aws_credentials_available ? 'AWS GEOCODING · LOCAL GIS' : 'LOCAL GIS';
+              checkLocationStatus();
             });
 
           // Fetch Amazon Location Cadastral Geofence
-          fetch(`/api/location/geofence/${surveyNo}`)
+          fetch(`/api/location/geofence/${encodeURIComponent(parcelKey)}`)
             .then(r => r.json())
             .then(geo => {
+              if (String(surveyNo) !== currentSurvey || parcelId !== currentParcelId) return;
               const gf = document.getElementById('geofenceStatusText');
               gf.innerText = geo.geofence_status;
               gf.className = geo.environmental_clearance ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
             });
 
-          // Trigger AI Reasoning & Verification
-          triggerVerification();
+        })
+        .catch(err => {
+          document.getElementById('aiAnswerContent').textContent = 'Parcel lookup failed: ' + err.message + '. Repeated survey numbers require village/block identification.';
+          if (activePolygonLayer) { map.removeLayer(activePolygonLayer); activePolygonLayer = null; }
         });
     }
 
     function calculateAndDisplayRoute() {
+      const requestedParcel = currentParcelId;
       const rBtn = document.getElementById('routeBtn');
       rBtn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Routing...</span>`;
       rBtn.disabled = true;
@@ -920,7 +979,7 @@
       fetch('/api/location/route', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ survey_no: currentSurvey })
+        body: JSON.stringify({ survey_no: currentSurvey, parcel_id: currentParcelId })
       })
       .then(r => r.json())
       .then(data => {
@@ -929,7 +988,10 @@
         lucide.createIcons();
 
         // Update badge
-        document.getElementById('routeMetricBadge').innerText = `${data.distance_km} km · ${data.duration_minutes} mins`;
+        if (requestedParcel !== currentParcelId) return;
+        checkLocationStatus();
+        const estimated = !data.aws_credentials_available;
+        document.getElementById('routeMetricBadge').innerText = `${estimated ? 'Estimate: ' : ''}${data.distance_km} km · ${data.duration_minutes} mins`;
 
         // Clear previous route
         if (currentRouteLayer) {
@@ -962,8 +1024,8 @@
         const stepsDrawer = document.getElementById('routeStepsDrawer');
         stepsDrawer.classList.remove('hidden');
         stepsDrawer.innerHTML = '';
-        data.steps.forEach(step => {
-          stepsDrawer.innerHTML += `<div class="py-0.5 border-b border-slate-100 flex items-center space-x-1.5"><span class="text-blue-500 font-bold">➜</span><span>${step}</span></div>`;
+        (data.steps || [estimated ? 'Straight-line estimate; road navigation unavailable offline.' : 'Road route returned; turn instructions are not available.']).forEach(step => {
+          stepsDrawer.innerHTML += `<div class="py-0.5 border-b border-slate-100 flex items-center space-x-1.5"><span class="text-blue-500 font-bold">➜</span><span>${escapeHtml(step)}</span></div>`;
         });
       })
       .catch(err => {
@@ -975,7 +1037,7 @@
     }
 
     function triggerVerification() {
-      executeAiQuery(`Analyze Survey Number ${currentSurvey} in Keelathattaparai village and verify crop health`);
+      executeAiQuery(`Analyze Survey Number ${currentSurvey} and verify crop and growth stage`);
     }
 
     function quickPrompt(text) {
@@ -984,9 +1046,14 @@
     }
 
     function executeAiQuery(customQuery) {
+      if (!initialParcelReady) {
+        document.getElementById('aiAnswerContent').textContent = 'Loading parcel data. Please retry when loading completes.';
+        return;
+      }
       const qInput = document.getElementById('aiQueryInput');
       const query = customQuery || qInput.value.trim();
       if (!query) return;
+      const requestId = ++auditRequestId;
 
       const submitBtn = document.getElementById('aiSubmitBtn');
       submitBtn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Reasoning...</span>`;
@@ -1006,6 +1073,8 @@
       const payload = {
         query: query,
         survey_no: currentSurvey,
+        parcel_id: currentParcelId,
+        image_filename: document.getElementById('photoSelectDropdown').value || undefined,
         document_path: selectedDoc || undefined,
         force_escalate: document.getElementById('simEscalate').checked,
         simulate_conflict: document.getElementById('simConflict').checked
@@ -1018,13 +1087,19 @@
       })
       .then(r => r.json())
       .then(res => {
+        if (requestId !== auditRequestId) return;
         submitBtn.innerHTML = `<span>Ask AI</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`;
         submitBtn.disabled = false;
         lucide.createIcons();
 
         // Update active survey if AI extracted a different one
         if (res.target_survey_no && res.target_survey_no !== currentSurvey) {
+          if (activePolygonLayer) { map.removeLayer(activePolygonLayer); activePolygonLayer = null; }
+          if (currentRouteLayer) { map.removeLayer(currentRouteLayer); currentRouteLayer = null; }
+          if (depotMarker) { map.removeLayer(depotMarker); depotMarker = null; }
+          document.getElementById('routeMetricBadge').textContent = 'Not calculated';
           currentSurvey = res.target_survey_no;
+          currentParcelId = res.verified_result_object.parcel_id || null;
           document.getElementById('activeSurveyBadge').innerText = `Survey ${currentSurvey}`;
           if (allParcelsGeoJsonLayer) {
             allParcelsGeoJsonLayer.setStyle(getParcelStyle);
@@ -1032,12 +1107,27 @@
         }
 
         // Update AI Badge & Latency
+        document.getElementById('drawerTitle').textContent = `Survey ${res.target_survey_no || 'Unspecified'} Inspection`;
+        document.getElementById('drawerSubtitle').textContent = `${res.extracted_attributes.gis_area_acres ?? 'Unresolved'} Acres · ${res.verified_result_object.village}`;
+        document.getElementById('reverseAddressText').textContent = `Survey ${res.target_survey_no || 'Unspecified'} · ${res.verified_result_object.village} (dataset)`;
+        document.getElementById('locServiceSourceBadge').textContent = 'LOCAL GIS · DATASET';
+        document.getElementById('geofenceStatusText').textContent = res.spatial_verification.waterbody_buffer_50m_compliant ? 'COMPLIANT (GIS)' : 'NOT VERIFIED / CONFLICT';
+        document.getElementById('gisAreaText').textContent = res.extracted_attributes.gis_area_acres == null ? 'Not resolved' : `${res.extracted_attributes.gis_area_acres} Acres`;
+        const spatial = res.spatial_verification || {};
+        document.getElementById('roadDistText').textContent = spatial.distance_to_road_meters == null ? 'Not resolved' : `${spatial.distance_to_road_meters} m`;
+        document.getElementById('waterDistText').textContent = spatial.distance_to_waterbody_meters == null ? 'Not resolved' : `${spatial.distance_to_waterbody_meters} m`;
+        if (res.extracted_attributes.gis_area_acres == null) {
+          document.getElementById('drawerSubtitle').textContent = 'Parcel missing or identity ambiguous';
+          document.getElementById('reverseAddressText').textContent = 'Parcel not resolved';
+          document.getElementById('geofenceStatusText').textContent = 'Not resolved';
+          if (activePolygonLayer) { map.removeLayer(activePolygonLayer); activePolygonLayer = null; }
+        }
         document.getElementById('aiModelBadgeText').innerText = res.model_used;
         document.getElementById('aiLatencyBadge').innerText = `${res.latency_ms}ms · ${res.tokens.total_tokens} tokens`;
 
         // Render AI Answer (Markdown support)
-        if (typeof marked !== 'undefined') {
-          document.getElementById('aiAnswerContent').innerHTML = marked.parse(res.answer);
+        if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+          document.getElementById('aiAnswerContent').innerHTML = DOMPurify.sanitize(marked.parse(res.answer));
         } else {
           document.getElementById('aiAnswerContent').innerText = res.answer;
         }
@@ -1046,7 +1136,7 @@
         const thoughtContainer = document.getElementById('aiThoughtStepsList');
         thoughtContainer.innerHTML = '';
         res.thought_process.forEach(step => {
-          thoughtContainer.innerHTML += `<div class="py-0.5 border-b border-slate-100">${step}</div>`;
+          thoughtContainer.innerHTML += `<div class="py-0.5 border-b border-slate-100">${escapeHtml(step)}</div>`;
         });
 
         // Update Drawer Decision Badge
@@ -1124,10 +1214,21 @@
         const photoBadge = document.getElementById('photoBadge');
 
         if (vobj.source_evidence && vobj.source_evidence[2] && vobj.source_evidence[2].source_ref) {
-          photoImg.src = '/api/image/' + vobj.source_evidence[2].source_ref;
+          fetch('/api/image/' + encodeURIComponent(vobj.source_evidence[2].source_ref))
+            .then(response => response.blob())
+            .then(blob => {
+              if (requestId !== auditRequestId) return;
+              if (activePhotoUrl) URL.revokeObjectURL(activePhotoUrl);
+              activePhotoUrl = URL.createObjectURL(blob);
+              photoImg.src = activePhotoUrl;
+            }).catch(() => {
+              photoImg.classList.add('hidden');
+              photoPlaceholder.classList.remove('hidden');
+              photoBadge.textContent = 'Photo preview unavailable';
+            });
           photoImg.classList.remove('hidden');
           photoPlaceholder.classList.add('hidden');
-          photoBadge.innerText = `${attrs.predicted_crop} · ${attrs.growth_stage}`;
+          photoBadge.innerText = `${attrs.predicted_crop} · ${attrs.growth_stage}${attrs.photo_association_verified ? ' · Location matched' : ' · Location unverified'}`;
           photoBadge.className = "bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md text-[10px]";
         } else {
           photoImg.src = '';
@@ -1137,8 +1238,8 @@
           photoBadge.className = "bg-rose-100 text-rose-800 font-semibold px-2 py-0.5 rounded-md text-[10px]";
         }
         document.getElementById('advisoryTitle').innerText = adv.advisory_title || "Agronomy Advisory";
-        document.getElementById('advisoryBody').innerText = adv.fertilizer_schedule;
-        document.getElementById('advisoryCitation').innerText = adv.citation_source;
+        document.getElementById('advisoryBody').innerText = adv.fertilizer_schedule || adv.notice || 'No grounded advisory available.';
+        document.getElementById('advisoryCitation').innerText = adv.citation_source || 'No source retrieved';
         document.getElementById('ftsValueText').innerText = `${trust.task_trust_score_fts} / 1.0`;
 
         // Update Telemetry Steps
@@ -1147,14 +1248,15 @@
         res.routing_telemetry.steps.forEach(s => {
           traceContainer.innerHTML += `
             <div class="flex items-center justify-between p-1 bg-white rounded border border-slate-100">
-              <span class="truncate max-w-[180px] text-slate-700">${s.name}</span>
-              <span class="text-slate-400">${s.model_or_tool}</span>
+              <span class="truncate max-w-[180px] text-slate-700">${escapeHtml(s.name)}</span>
+              <span class="text-slate-400">${escapeHtml(s.actual_execution_model || s.model_or_tool)}</span>
               <span class="text-emerald-600 font-bold">${s.latency_ms}ms</span>
             </div>
           `;
         });
       })
       .catch(err => {
+        if (requestId !== auditRequestId) return;
         submitBtn.innerHTML = `<span>Ask AI</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`;
         submitBtn.disabled = false;
         document.getElementById('aiAnswerContent').innerText = "AI query error: " + err;
@@ -1183,6 +1285,18 @@
           }
         })
         .catch(err => console.warn("Failed loading documents list:", err));
+    }
+
+    function loadAvailablePhotos() {
+      fetch('/api/images').then(response => response.json()).then(data => {
+        const select = document.getElementById('photoSelectDropdown');
+        for (const record of data.images || []) {
+          const option = document.createElement('option');
+          option.value = record.filename;
+          option.textContent = record.filename;
+          select.appendChild(option);
+        }
+      }).catch(error => console.warn('Photo library unavailable:', error.message));
     }
 
     function uploadCustomPdf(input) {
@@ -1319,7 +1433,7 @@
       }
 
       if (type === 'flagged') {
-        const flagged = allParcelsList.filter(p => p.badge !== 'success');
+        const flagged = allParcelsList.filter(p => p.badge === 'error' || p.badge === 'warning');
         renderParcelTable(flagged);
       } else {
         renderParcelTable(allParcelsList);
@@ -1346,6 +1460,7 @@
       const keyInput = document.getElementById('farmsyncApiKey');
       if (keyInput) keyInput.value = savedKey;
       document.getElementById('awsModal').classList.remove('hidden');
+      checkAwsStatus();
     }
 
     function closeAwsModal() {
@@ -1353,57 +1468,55 @@
     }
 
     function saveAwsSettings() {
-      const keyId = document.getElementById('awsKeyId').value.trim();
-      const secret = document.getElementById('awsSecretKey').value.trim();
-      const session = document.getElementById('awsSessionToken').value.trim();
-      const apiKey = (document.getElementById('farmsyncApiKey') ? document.getElementById('farmsyncApiKey').value.trim() : '') || localStorage.getItem('farmsync_api_key') || '';
+      const apiKey = document.getElementById('farmsyncApiKey').value.trim();
+      if (apiKey) localStorage.setItem('farmsync_api_key', apiKey);
+      else localStorage.removeItem('farmsync_api_key');
+      closeAwsModal();
+    }
 
-      if (!keyId || !secret) {
-        alert("Please enter AWS Access Key ID and Secret Access Key.");
-        return;
+    function displayCloudChecks(result) {
+      const labels = {credentials: 'Builder credentials', text_3b: 'Ministral 3B reasoning', vision_8b: 'Ministral 8B vision', text_embeddings: 'Titan text embeddings', multimodal_embeddings: 'Titan multimodal embeddings'};
+      const container = document.getElementById('cloudChecksList');
+      container.replaceChildren();
+      for (const [name, check] of Object.entries(result.checks || {})) {
+        const row = document.createElement('div');
+        row.textContent = `${labels[name] || name}: ${check.status}${check.error_code ? ' (' + check.error_code + ')' : ''}${check.reason ? ' — ' + check.reason : ''}`;
+        row.className = check.status === 'PASS' ? 'text-emerald-700' : check.status === 'FAIL' ? 'text-rose-700' : 'text-slate-500';
+        container.appendChild(row);
       }
-
-      if (apiKey) {
-        localStorage.setItem('farmsync_api_key', apiKey);
+      if (result.checked_at_utc) {
+        const time = document.createElement('div');
+        time.className = 'text-[10px] text-slate-500 pt-2';
+        time.textContent = 'Checked: ' + new Date(result.checked_at_utc).toLocaleString();
+        container.appendChild(time);
       }
+    }
 
-      const saveBtn = document.getElementById('saveAwsBtn');
-      saveBtn.innerText = "Connecting...";
-      saveBtn.disabled = true;
-
-      const reqHeaders = { 'Content-Type': 'application/json' };
-      if (apiKey) {
-        reqHeaders['X-API-Key'] = apiKey;
-      }
-
-      fetch('/api/settings/aws', {
-        method: 'POST',
-        headers: reqHeaders,
-        body: JSON.stringify({
-          access_key_id: keyId,
-          secret_access_key: secret,
-          session_token: session || null,
-          region: "ap-south-1",
-          api_key: apiKey || null
-        })
-      })
-      .then(async r => {
-        const data = await r.json();
-        if (!r.ok) {
-          throw new Error(data.detail || `HTTP ${r.status}`);
-        }
-        return data;
-      })
-      .then(st => {
-        saveBtn.innerText = "Save & Connect";
-        saveBtn.disabled = false;
-        closeAwsModal();
+    async function runCloudChecks() {
+      const button = document.getElementById('cloudCheckBtn');
+      button.disabled = true;
+      button.textContent = 'Checking…';
+      const key = document.getElementById('farmsyncApiKey').value.trim();
+      if (key) localStorage.setItem('farmsync_api_key', key);
+      try {
+        const response = await fetch('/api/settings/aws/check', {method: 'POST'});
+        displayCloudChecks(await response.json());
         checkAwsStatus();
-      })
-      .catch(e => {
-        saveBtn.innerText = "Save & Connect";
-        saveBtn.disabled = false;
-        alert("Configuration error: " + e.message);
+      } catch (error) {
+        document.getElementById('cloudChecksList').textContent = 'Live check failed: ' + error.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Check live AI services';
+      }
+    }
+
+    function checkLocationStatus() {
+      fetch('/api/location/status').then(r => r.json()).then(st => {
+        document.getElementById('locationStatusText').innerText = st.connection_verified
+          ? 'AWS Location · verified'
+          : st.cloud_location_enabled && st.client_initialized ? 'AWS Location · configured' : 'Local GIS & logistics';
+      }).catch(() => {
+        document.getElementById('locationStatusText').innerText = 'Location status unavailable';
       });
     }
 
@@ -1411,6 +1524,7 @@
       fetch('/api/settings/aws/status')
         .then(r => r.json())
         .then(st => {
+          if (st.live_service_checks) displayCloudChecks(st.live_service_checks);
           const btn = document.getElementById('bedrockStatusBtn');
           const dot = document.getElementById('bedrockStatusDot');
           const text = document.getElementById('bedrockStatusText');
@@ -1418,7 +1532,7 @@
           if (st.bedrock_client_ready) {
             btn.className = "flex items-center space-x-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-300 text-xs font-medium transition";
             dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
-            text.innerText = `AWS Bedrock Ministral (274ms)`;
+            text.innerText = st.connection_verified ? 'Bedrock: last call succeeded' : st.connection_status === 'ERROR' ? 'Bedrock: connection failed' : 'Bedrock configured (connection untested)';
           } else {
             btn.className = "flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-800 px-3.5 py-1.5 rounded-full border border-slate-300 text-xs font-medium transition";
             dot.className = "w-2 h-2 rounded-full bg-brand-500 animate-pulse";

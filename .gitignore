@@ -8,6 +8,10 @@ FAI_Product_Challange.zip
 *.key
 credentials.json
 
+# Organizer-only reference documents recovered locally from the challenge archive
+data/FAI_Product_Challange/FarmwiseAI_TCE_AWS_Access_Guide.pdf
+data/FAI_Product_Challange/FAI_Task_Details_Requirements.pdf
+
 # Python
 __pycache__/
 *.py[cod]

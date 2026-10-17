@@ -320,7 +320,8 @@ class TaskGraphCompiler:
         q_lower = query.lower()
         if any(k in q_lower for k in ["discrepancy", "unmatched", "extent difference", "acquisition progress"]):
             workflow_type = "LAND_DISCREPANCY_INTELLIGENCE"
-            specs = self.DISCREPANCY_SPECS
+            # The executor supports single-parcel checks, not batch document extraction.
+            specs = self.PARCEL_ADVISORY_SPECS
         elif any(k in q_lower for k in ["waterbody", "buffer", "runoff", "environmental", "geofence"]):
             workflow_type = "ENVIRONMENTAL_BUFFER_AUDIT"
             specs = self.BUFFER_AUDIT_SPECS

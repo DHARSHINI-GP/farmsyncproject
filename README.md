@@ -1,204 +1,125 @@
-# FARMSYNC: Multimodal Geospatial AI Platform
+# FARMSYNC
 
-<div align="center">
+Task 1 prototype for the FarmwiseAI Product Challenge: evidence-driven orchestration
+of crop photographs, land documents and deterministic geospatial analysis.
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![AWS Bedrock](https://img.shields.io/badge/AWS_Bedrock-ap--south--1-FF9900.svg?logo=amazon-aws&logoColor=white)](https://aws.amazon.com/bedrock/)
-[![Amazon Location](https://img.shields.io/badge/Amazon_Location-Place_&_Route-232F3E.svg?logo=amazon-aws&logoColor=white)](https://aws.amazon.com/location/)
-[![PostGIS UTM 44N](https://img.shields.io/badge/GIS-EPSG:32644-27AE60.svg)](https://epsg.io/32644)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+**Current release status:** local workflows are testable; live AWS acceptance requires
+a valid organizer-issued Builder session. See [HACKATHON_READINESS.md](HACKATHON_READINESS.md)
+for the organizer requirements, current implementation and remaining gates. Historical
+proposals and generated slides are not proof of deployed or tested cloud capability.
 
-**An Enterprise Multi-Model, Multimodal & Agentic AI System for Cadastral Land Verification, Ag-Logistics Routing, and Agronomic Intelligence**
+## Features
 
-*Developed for the FarmwiseAI Campus Product Challenge (Task 1)*  
-**Team**: PRIME (`TCPC-2026-00071`) · **Institution**: Thiagarajar College of Engineering, Madurai
+- Leaflet map with 396 polygon records across seven villages, satellite/road/water
+  layers, parcel search and feature-specific selection.
+- GeoPandas/Shapely area and proximity analysis in EPSG:32644, including FMB subdivision
+  lookup. No PostGIS service is required.
+- PDF upload and claim extraction, demonstration registry comparison and explicit
+  missing/conflicting-evidence responses. The registry is not authoritative government data.
+- Local MobileNetV3 crop/stage inference and optional approved Bedrock Ministral 8B
+  vision escalation. Photos must match a parcel spatially before being treated as
+  parcel evidence; explicitly selected unlocated photos are analyzed separately.
+- Agronomy retrieval from the bundled ten-entry corpus with optional Titan Text
+  Embeddings V2; local retrieval is available without AWS.
+- Predefined workflow DAGs, evidence provenance, trust breakdown and actual-tool traces.
+- Local route estimates; Amazon Location is an optional extension requiring additional
+  organizer permission and is disabled by default.
 
-</div>
+## Organizer-approved AWS configuration
 
----
+The recovered access guide is in
+`data/FAI_Product_Challange/FarmwiseAI_TCE_AWS_Access_Guide.pdf`.
+Task 1 uses Mumbai (`ap-south-1`) and these models:
 
-## 🌟 Key Features
+| Purpose | Model |
+|---|---|
+| Summaries | `mistral.ministral-3-3b-instruct` |
+| Vision escalation | `mistral.ministral-3-8b-instruct` |
+| Optional text retrieval embeddings | `amazon.titan-embed-text-v2:0` |
+| Multimodal embedding access check | `amazon.titan-embed-image-v1` |
 
-- **🗺️ Interactive 396-Parcel Cadastral Vector GIS**:
-  - Full vector polygon rendering of all 396 cadastral parcels in Keelathattaparai village, Thoothukudi.
-  - Hover tooltips, click-to-focus inspection, and dynamic status styling (🟢 Verified, 🟡 Caution, 🔴 Discrepancy).
-  - High-resolution satellite basemap toggle (Esri World Imagery) and 233 local road vectors.
+The shared core services are S3, Lambda, API Gateway, DynamoDB and CloudWatch Logs.
+Their availability does not mean every service must be used. This repository does
+not currently implement a deployed Lambda/API Gateway stack or S3/DynamoDB persistence.
+Use the assigned `fai-tce-team26-*` resource prefix and existing execution role when
+deploying; do not create IAM roles or use another region to work around access denial.
 
-- **📍 Amazon Location Service Integration (`ap-south-1` Mumbai)**:
-  - **Reverse Geocoding (`FARMSYNC_PlaceIndex`)**: Translates parcel centroids into official Tamil Nadu administrative village addresses.
-  - **Ag-Logistics Supply Route Calculator (`FARMSYNC_RouteCalculator`)**: Calculates transit paths, driving distances (**10.71 km**), and durations (**22.1 mins**) from Vagaikulam TNAU Supply Depot to farmer parcels, plotted on Leaflet.
-  - **Cadastral Geofencing**: Real-time auditing against 50m environmental waterbody buffer protection zones.
+Claude, cross-region profiles and GPU/EC2/RDS infrastructure are not enabled by this
+Task 1 configuration. The router uses approved Ministral models and a local student.
 
-- **🧠 Live AWS Bedrock Foundation Models**:
-  - Live natural language reasoning via `mistral.ministral-3-3b-instruct` / Claude 3.5 in Mumbai.
-  - Generates structured executive summaries, regulatory extent cross-checks, and fertilizer schedules.
+## Run locally
 
-- **📐 Deterministic PostGIS Zero-Hallucination Extent Verification**:
-  - Computes exact metric parcel area in UTM Zone 44N (`EPSG:32644`).
-  - Mathematically detects document mismatches without LLM spatial hallucinations.
+Use a dedicated Python 3.10+ environment:
 
-- **🌾 Multimodal Vision Crop Classifier & Teacher Escalation**:
-  - Ingests 3,422 field photos to classify crop species (`Coconut`, `Paddy`, `Maize`, `Banana`, `Sugarcane`) and growth stages.
-  - Automatic escalation from lightweight student models to high-capacity reasoning models upon uncertainty.
-
-- **🛡️ Model-Agnostic Trust Score (FTS)**:
-  - Synthesizes 5 independent evidence signals into a single score:
-    $$\text{FTS} = w_1 \cdot \text{Calibration} + w_2 \cdot \text{EvidenceCoverage} + w_3 \cdot \text{SourceConsistency} + w_4 \cdot \text{DeterministicVal} + w_5 \cdot \text{OutputValidity} - w_6 \cdot \text{ConflictPenalty}$$
-  - Triggers Refuse-to-Invent abstentions upon evidence discrepancies.
-
-- **📚 Cited Agronomic Package of Practices**:
-  - Grounded in official TNAU Agritech & ICAR-CPCRI Technical Bulletins.
-
----
-
-## 🏛️ System Architecture
-
-```
-                                USER REQUEST / NATURAL LANGUAGE PROMPT
-                                                  │
-                                                  ▼
-                                       ┌─────────────────────┐
-                                       │ TASK GRAPH COMPILER │
-                                       └──────────┬──────────┘
-                                                  │
-                                                  ▼
-                                       ┌─────────────────────┐
-                                       │VERIFIED-UTILITY ROUTER│
-                                       └──────────┬──────────┘
-                                                  │
-                     ┌────────────────────────────┼────────────────────────────┐
-                     ▼                            ▼                            ▼
-         [AWS Bedrock Foundation]      [Amazon Location Service]     [Deterministic PostGIS]
-          Ministral 3B / Claude 3.5     Place Index & Routing         UTM 44N Area & Buffers
-          (ap-south-1 Mumbai)           (ap-south-1 Mumbai)           (Zero Hallucination)
-                     │                            │                            │
-                     └────────────────────────────┼────────────────────────────┘
-                                                  │
-                                                  ▼
-                                       ┌─────────────────────┐
-                                       │   EVIDENCE GRAPH    │
-                                       └──────────┬──────────┘
-                                                  │
-                                                  ▼
-                                       ┌─────────────────────┐
-                                       │    TRUST ENGINE     │
-                                       └──────────┬──────────┘
-                                                  │
-                          ┌───────────────────────┼───────────────────────┐
-                          ▼                       ▼                       ▼
-                     [ ACCEPT ]              [ ESCALATE ]            [ ABSTAIN ]
-                  All evidence valid      Low vision conf. →      Discrepancy detected →
-                                          Teacher verification    Regulatory Audit
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
----
+Do not overwrite an existing credential file. For offline operation, set
+`FARMSYNC_OFFLINE=true`. Provision the trained crop head and cached MobileNetV3
+backbone before enabling local image inference. The embedding model is optional;
+stable local term hashing is used when it is unavailable.
 
-## 🚀 Quick Start Guide
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/safi-prog/farmsync.git
-cd farmsync
-```
-
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configure AWS Credentials (Optional for Live Bedrock/Location)
-Create a `.env` file in the root directory:
-```env
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-AWS_SESSION_TOKEN=your_session_token # If using IAM Identity Center / SSO
-AWS_DEFAULT_REGION=ap-south-1
-BEDROCK_MODEL_ID=mistral.ministral-3-3b-instruct
-AMAZON_LOCATION_INDEX=FARMSYNC_PlaceIndex
-AMAZON_LOCATION_ROUTER=FARMSYNC_RouteCalculator
-AMAZON_LOCATION_GEOFENCE=FARMSYNC_GeofenceCollection
-```
-*(Note: If AWS credentials are not set, the platform seamlessly runs with the built-in deterministic offline GIS and reasoning engine with 100% functionality).*
-
-### 4. Run the Modern Platform (FastAPI UI)
-```bash
-python -m uvicorn farmsync.server:app --host 0.0.0.0 --port 8000
-```
-Open **[http://localhost:8000](http://localhost:8000)** in your browser.
-
-### 5. Run the Streamlit Benchmark Dashboard
-```bash
+```powershell
+python -m uvicorn farmsync.server:app --host 127.0.0.1 --port 8000
 python -m streamlit run farmsync/ui/app.py --server.port 8501
 ```
-Open **[http://localhost:8501](http://localhost:8501)** in your browser.
 
----
+## Connect the assigned AWS session
 
-## 📂 Project Structure
+Sign in with the organizer-assigned Identity Center username at
+[the access portal](https://ssoins-6595aa2cbf056abd.portal.ap-south-1.app.aws), complete
+MFA, select the team account and its Builder role. Copy the matching temporary
+access key, secret and session token into local `.env`, or configure a signed-in
+CLI SSO profile and set `FARMSYNC_AWS_PROFILE` to that profile name.
+SDK deployment-role credentials are also supported. Never paste AWS secrets into
+the application UI, chat, source code or a public repository.
 
-```
-farmsync/
-├── farmsync/
-│   ├── ai/
-│   │   └── engine.py              # AWS Bedrock & Chain-of-Thought reasoning engine
-│   ├── spatial/
-│   │   ├── engine.py              # Deterministic PostGIS UTM 44N geometric engine
-│   │   └── amazon_location.py     # Amazon Location Place Index & Route Calculator
-│   ├── vision/
-│   │   └── classifier.py          # Multimodal crop perception & student/teacher escalation
-│   ├── documents/
-│   │   └── extractor.py           # Document OCR & legal registry cross-referencing
-│   ├── knowledge/
-│   │   └── advisory.py            # TNAU/ICAR agronomic guidance & package of practices
-│   ├── router/
-│   │   ├── compiler.py            # Natural language Task Graph DAG compiler
-│   │   └── router.py              # Verified-Utility capability-aware subtask router
-│   ├── trust/
-│   │   ├── trust_score.py         # Model-Agnostic Trust Score (FTS) engine
-│   │   └── evidence_graph.py      # Directed Acyclic Graph (DAG) provenance builder
-│   ├── static/
-│   │   └── index.html             # Modern enterprise UI (Leaflet map + HUD + AI Copilot)
-│   ├── ui/
-│   │   └── app.py                 # Streamlit benchmark and evaluation dashboard
-│   ├── orchestrator.py            # Master workflow coordination pipeline
-│   └── server.py                  # FastAPI REST API backend (Port 8000)
-├── data/                          # Cadastral GeoJSON layers, road vectors & crop photos
-├── tests/                         # Automated unit and integration test suite
-├── scripts/
-│   └── setup_amazon_location.py  # Automation script for AWS Location Service setup
-├── FARMSYNC_Final_Submission.md   # Final comprehensive technical proposal
-├── FARMSYNC_Presentation_Deck.pptx# Executive presentation slide deck (8 widescreen slides)
-├── requirements.txt               # Python package dependencies
-├── .gitignore                     # Repository exclusion rules
-└── README.md                      # Project documentation
+Set `FARMSYNC_OFFLINE=false` and keep `AWS_DEFAULT_REGION=ap-south-1`. Windows
+clients use the existing system-trusted certificates; other deployments can set
+`AWS_CA_BUNDLE` to their organization's trusted bundle. TLS validation stays enabled.
+
+```powershell
+python scripts/check_aws_integration.py --output scratch/aws-live-check.json
 ```
 
----
+The explicit check validates STS first, then makes small model calls only when
+credentials pass. It creates no resources. A nonzero exit status means a check
+failed. The UI's **Cloud service status** panel exposes the same live checks and
+can reload refreshed local credentials without accepting AWS secrets in the browser.
 
-## 🧪 Testing & Verification
+Set `FARMSYNC_EMBEDDINGS_PROVIDER=bedrock` to use Titan for advisory retrieval;
+local is the default. Cloud embedding failures rebuild a fully local index rather
+than mixing incompatible vectors.
 
-Run automated test suite:
-```bash
-pytest tests/ -v
+## Validation and limitations
+
+```powershell
+$env:FARMSYNC_OFFLINE='true'
+$env:HF_HUB_OFFLINE='1'
+$env:OMP_NUM_THREADS='1'
+$env:MKL_NUM_THREADS='1'
+python -m pytest -q
 ```
 
-All spatial, vision, orchestrator, and AWS integration tests run with 100% pass rates.
+Tests include mocks and controlled scenarios; they do not prove live model access,
+legal ownership, agronomic correctness or deployment reliability. Stored benchmark
+results predate the corrected photo/parcel association and must be re-evaluated.
+Costs are estimates, and competitor baselines are simulations.
 
----
+Read [PROJECT_AUDIT.md](PROJECT_AUDIT.md) for the manual checklist and broader
+production gaps. Configure authentication, protected data access, durable storage,
+monitoring and the deployment target before any public release.
 
-## 👥 Team & Submission Information
+Team PRIME · Team-26 · TCPC-2026-00071 · Thiagarajar College of Engineering.
 
-- **Challenge**: FarmwiseAI Campus Product Challenge 2026 (Task 1)
-- **Team**: PRIME (`Team-26`)
-- **Submission ID**: `TCPC-2026-00071`
-- **Institution**: Thiagarajar College of Engineering, Madurai, Tamil Nadu
-- **Team Members**:
-  - Mohammed Asfaq S (`mohamedasfaq@student.tce.edu`)
-  - Safi A (`safi@student.tce.edu`)
-  - Sooraj TS (`soorajts@student.tce.edu`)
+### Grounded audit reports
 
----
-
-## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Bedrock selects a constrained report focus; the server renders report facts from
+actual GIS, document and vision results. Free-form model prose is not published
+as verified evidence. The separate Location role supports verified cloud reverse
+geocoding and road routing; local GIS computes parcel buffer checks. See
+`HACKATHON_READINESS.md` for live results and remaining deployment gates.

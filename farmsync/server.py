@@ -7,14 +7,15 @@ load_dotenv()
 from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, HTTPException, UploadFile, File, Security, Depends, Request
 from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from farmsync.orchestrator import FarmSyncOrchestrator
 from farmsync.ai.engine import AIAssistantEngine
 from farmsync.spatial.amazon_location import AmazonLocationServiceEngine
+from farmsync.aws import check_approved_services, TEXT_MODEL, TEACHER_MODEL, EMBEDDING_MODEL, REGION
 
 app = FastAPI(title="FARMSYNC Enterprise Platform", version="2.0.0")
 
@@ -84,7 +85,7 @@ async def verify_sensitive_endpoint_access(
     configured_key = os.getenv("FARMSYNC_API_KEY", "").strip()
 
     if configured_key:
-        if not provided_key or not hmac.compare_digest(provided_key, configured_key):
+        if not isinstance(provided_key, str) or not hmac.compare_digest(provided_key.encode(), configured_key.encode()):
             raise HTTPException(
                 status_code=401,
                 detail="Unauthorized: Invalid or missing API key for sensitive endpoint."
@@ -99,6 +100,18 @@ async def verify_sensitive_endpoint_access(
         status_code=401,
         detail="Unauthorized: Sensitive endpoint requires authentication when accessed beyond local loopback. Configure FARMSYNC_API_KEY to authorize network requests."
     )
+
+
+@app.middleware("http")
+async def protect_challenge_data(request: Request, call_next):
+    # The organizer-provided datasets must not be exposed by unauthenticated APIs.
+    if request.url.path.startswith("/api/") and request.method != "OPTIONS":
+        try:
+            credentials = await HTTP_BEARER(request)
+            await verify_sensitive_endpoint_access(request, request.headers.get("X-API-Key"), credentials)
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return await call_next(request)
 
 def sanitize_upload_filename(filename: Optional[str]) -> str:
     """
@@ -160,18 +173,25 @@ STATUS_MAP = {
     "385": {"status": "Verified", "badge": "success", "date": "Oct 05, 2026", "crop": "Cotton", "owner": "Marimuthu K"},
     "386": {"status": "Verified", "badge": "success", "date": "Oct 04, 2026", "crop": "Groundnut", "owner": "Ganesan R"},
 }
+# These are presentation fixtures, not persisted audits. Require an explicit opt-in.
+if os.getenv("FARMSYNC_DEMO_MODE", "false").lower() != "true":
+    STATUS_MAP = {}
 
 class OrchestrateRequest(BaseModel):
-    query: str
+    query: str = Field(min_length=1, max_length=8000)
     survey_no: Optional[str] = None
+    parcel_id: Optional[str] = None
+    image_filename: Optional[str] = None
     document_path: Optional[str] = None
     force_escalate: Optional[bool] = False
     simulate_conflict: Optional[bool] = False
     simulate_ood: Optional[bool] = False
 
 class AIQueryRequest(BaseModel):
-    query: str
+    query: str = Field(min_length=1, max_length=8000)
     survey_no: Optional[str] = None
+    parcel_id: Optional[str] = None
+    image_filename: Optional[str] = None
     document_path: Optional[str] = None
     force_escalate: Optional[bool] = False
     simulate_conflict: Optional[bool] = False
@@ -182,11 +202,13 @@ class AWSSettingsRequest(BaseModel):
     session_token: Optional[str] = None
     region: Optional[str] = "ap-south-1"
     api_key: Optional[str] = None
+    model_id: Optional[str] = Field(default=None, min_length=1, max_length=256)
 
 class RouteRequest(BaseModel):
     survey_no: str
-    origin_lat: Optional[float] = None
-    origin_lon: Optional[float] = None
+    parcel_id: Optional[str] = None
+    origin_lat: Optional[float] = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    origin_lon: Optional[float] = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
@@ -202,8 +224,9 @@ async def get_parcels():
     surveys = orchestrator.spatial.list_surveys()
     results = []
 
-    for s in surveys:
-        p = orchestrator.spatial.get_parcel(s)
+    for _, row in orchestrator.spatial.gdf_parcels_wgs84.iterrows():
+        s = str(row["survey_no_clean"])
+        p = orchestrator.spatial.get_parcel(str(row["parcel_id"]))
         if p:
             if s in STATUS_MAP:
                 meta = STATUS_MAP[s]
@@ -219,6 +242,7 @@ async def get_parcels():
                 }
             results.append({
                 "survey_no": s,
+                "parcel_id": p["parcel_id"],
                 "name": f"Survey {s} - Block {p.get('block_id', '1')}",
                 "village": p["village"],
                 "district": p["district"],
@@ -230,9 +254,13 @@ async def get_parcels():
                 "owner": meta["owner"],
                 "centroid": p["centroid"]
             })
-    return {"total_parcels": len(surveys), "parcels": results}
+    return {
+        "total_parcels": len(results), "parcels": results,
+        "distinct_survey_numbers": len(surveys),
+        "ambiguous_survey_numbers": sum(orchestrator.spatial.get_parcel(s) is None for s in surveys)
+    }
 
-@app.get("/api/parcel/{survey_no}")
+@app.get("/api/parcel/{survey_no:path}")
 async def get_parcel_detail(survey_no: str):
     """Returns full parcel spatial audit and geometry GeoJSON."""
     p = orchestrator.spatial.get_parcel(survey_no)
@@ -259,7 +287,7 @@ async def get_all_parcels_geojson():
         data = json.load(f)
 
     # Enrich each feature's properties with computed area, status, and crop
-    for feat in data.get("features", []):
+    for row_index, feat in enumerate(data.get("features", [])):
         props = feat.get("properties", {})
         s_no = str(props.get("survey_no", ""))
         p_info = orchestrator.spatial.get_parcel(s_no)
@@ -275,7 +303,13 @@ async def get_all_parcels_geojson():
                 "owner": owner_name or f"Survey {s_no} (Unaudited)"
             }
         
-        area = p_info["area_acres"] if p_info else round(props.get("area", 0) / 4046.86, 2)
+        # Each map feature has its own polygon, even when a survey number repeats.
+        geometry = orchestrator.spatial.gdf_parcels_utm.iloc[row_index].geometry
+        area = round(float(geometry.area) / 4046.8564224, 3)
+        props["identity_ambiguous"] = p_info is None
+        props["parcel_id"] = str(orchestrator.spatial.gdf_parcels_wgs84.iloc[row_index]["parcel_id"])
+        if p_info is None:
+            meta = {"status": "Not verified", "badge": "neutral", "crop": "Unclassified", "owner": "Village/block identity required"}
         props["area_acres"] = area
         props["status"] = meta["status"]
         props["badge"] = meta["badge"]
@@ -310,7 +344,7 @@ async def get_waterbodies():
     return {"type": "FeatureCollection", "features": []}
 
 @app.post("/api/ai/query")
-async def run_ai_query(req: AIQueryRequest):
+def run_ai_query(req: AIQueryRequest, _auth: bool = Depends(verify_sensitive_endpoint_access)):
     """Executes natural language AI query with Bedrock or Enterprise Reasoner."""
     try:
         res = ai_engine.process_query(
@@ -318,7 +352,9 @@ async def run_ai_query(req: AIQueryRequest):
             survey_no=req.survey_no,
             document_path=req.document_path,
             force_escalate=req.force_escalate or False,
-            simulate_conflict=req.simulate_conflict or False
+            simulate_conflict=req.simulate_conflict or False,
+            parcel_id=req.parcel_id,
+            image_filename=req.image_filename
         )
         return res
     except Exception as e:
@@ -421,11 +457,14 @@ async def update_aws_settings(
     _auth: bool = Depends(verify_sensitive_endpoint_access)
 ):
     """Configures AWS Bedrock credentials dynamically with access control verification."""
+    if os.getenv("FARMSYNC_ALLOW_RUNTIME_CREDENTIALS", "false").lower() != "true":
+        raise HTTPException(status_code=403, detail="AWS credentials are configured on the server through .env, SSO or its deployment role. Browser credential editing is disabled.")
     status = ai_engine.configure_aws(
         access_key_id=req.access_key_id,
         secret_access_key=req.secret_access_key,
         session_token=req.session_token,
-        region=req.region or "ap-south-1"
+        region=req.region or "ap-south-1",
+        model_id=req.model_id
     )
     location_engine.configure_aws(
         access_key_id=req.access_key_id,
@@ -433,19 +472,53 @@ async def update_aws_settings(
         session_token=req.session_token,
         region=req.region or "ap-south-1"
     )
+    orchestrator.vision.configure_aws(
+        req.access_key_id, req.secret_access_key, req.session_token,
+        req.region or "ap-south-1"
+    )
     return status
 
 @app.get("/api/settings/aws/status")
 async def get_aws_settings_status():
     """Returns Bedrock readiness and connection status."""
-    return ai_engine.get_status()
+    return {
+        **ai_engine.get_status(),
+        "approved_text_models": [TEXT_MODEL, TEACHER_MODEL],
+        "approved_embedding_model": EMBEDDING_MODEL,
+        "credential_source": "SSO/profile or server environment/deployment role",
+        "live_service_checks": getattr(app.state, "aws_checks", None),
+    }
+
+
+@app.post("/api/settings/aws/check")
+def verify_approved_aws_services(_auth: bool = Depends(verify_sensitive_endpoint_access)):
+    """Explicit live check of approved models only; no resource creation."""
+    # Reload only AWS configuration after the operator refreshes a local session.
+    from dotenv import dotenv_values
+    allowed = {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_DEFAULT_REGION", "AWS_CA_BUNDLE", "AWS_PROFILE", "FARMSYNC_AWS_PROFILE", "BEDROCK_MODEL_ID", "BEDROCK_VISION_MODEL_ID"}
+    for key, value in dotenv_values(os.path.join(BASE_DIR, ".env")).items():
+        if key in allowed and value is not None:
+            if value:
+                os.environ[key] = value
+            else:
+                os.environ.pop(key, None)
+    ai_engine.region = os.getenv("AWS_DEFAULT_REGION", REGION)
+    ai_engine.bedrock_model_id = os.getenv("BEDROCK_MODEL_ID", TEXT_MODEL)
+    ai_engine._init_bedrock_client()
+    orchestrator.vision.bedrock_model_id = os.getenv("BEDROCK_VISION_MODEL_ID", TEACHER_MODEL)
+    orchestrator.vision._init_bedrock_client()
+    result = check_approved_services()
+    app.state.aws_checks = result
+    text_check = result["checks"].get("text_3b", result["checks"].get("credentials", {}))
+    ai_engine.last_bedrock_check = {"success": text_check.get("status") == "PASS", "error_code": text_check.get("error_code"), "checked_at_utc": result["checked_at_utc"]}
+    return result
 
 @app.get("/api/location/status")
 async def get_location_status():
     """Returns Amazon Location Service connectivity and configuration."""
     return location_engine.get_status()
 
-@app.get("/api/location/reverse-geocode/{survey_no}")
+@app.get("/api/location/reverse-geocode/{survey_no:path}")
 async def get_reverse_geocode(survey_no: str):
     """Reverse geocodes parcel centroid using Amazon Location Service."""
     p = orchestrator.spatial.get_parcel(survey_no)
@@ -456,24 +529,24 @@ async def get_reverse_geocode(survey_no: str):
     return location_engine.reverse_geocode(latitude=lat, longitude=lon, survey_no=survey_no)
 
 @app.post("/api/location/route")
-async def get_agri_route(req: RouteRequest):
+def get_agri_route(req: RouteRequest, _auth: bool = Depends(verify_sensitive_endpoint_access)):
     """Calculates ag-logistics route from depot to target parcel."""
     try:
         return location_engine.calculate_agri_route(
-            survey_no=req.survey_no,
+            survey_no=req.parcel_id or req.survey_no,
             origin_lat=req.origin_lat,
             origin_lon=req.origin_lon
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/api/location/geofence/{survey_no}")
+@app.get("/api/location/geofence/{survey_no:path}")
 async def get_geofence_status(survey_no: str):
     """Evaluates cadastral geofence buffer compliance."""
     return location_engine.evaluate_cadastral_geofence(survey_no)
 
 @app.post("/api/orchestrate")
-async def run_orchestration(req: OrchestrateRequest):
+def run_orchestration(req: OrchestrateRequest, _auth: bool = Depends(verify_sensitive_endpoint_access)):
     """Executes full agentic orchestration workflow without fabrication."""
     effective_query = req.query
     if req.survey_no and f"Survey {req.survey_no}" not in effective_query and f"Survey Number {req.survey_no}" not in effective_query:
@@ -485,7 +558,9 @@ async def run_orchestration(req: OrchestrateRequest):
         survey_no=req.survey_no,
         force_escalate_vision=req.force_escalate,
         simulate_conflict=req.simulate_conflict,
-        simulate_unsupported_crop=req.simulate_ood
+        simulate_unsupported_crop=req.simulate_ood,
+        parcel_id=req.parcel_id,
+        image_filename=req.image_filename
     )
     return res
 
@@ -495,11 +570,19 @@ async def get_image(filename: str):
     if not filename or filename.lower() in ["none", "null", "undefined", "default"]:
         raise HTTPException(status_code=404, detail="No field photo on record for parcel")
 
-    img_path = os.path.join(IMAGES_DIR, filename)
+    record = orchestrator.vision.image_registry.get(filename)
+    if not record:
+        raise HTTPException(status_code=404, detail="Image is not in the authorized photo library")
+    img_path = record["filepath"]
     if os.path.exists(img_path):
         return FileResponse(img_path, media_type="image/jpeg")
 
     raise HTTPException(status_code=404, detail=f"Field photo '{filename}' not found on disk")
+
+
+@app.get("/api/images")
+def list_image_evidence():
+    return {"images": [{"filename": filename} for filename in sorted(orchestrator.vision.image_registry)]}
 
 @app.get("/api/knowledge/status")
 async def get_knowledge_status():
@@ -515,9 +598,10 @@ async def get_system_status():
         "aws_region": ai_status["region"],
         "bedrock_model": ai_status["active_model"],
         "bedrock_ready": ai_status["bedrock_client_ready"],
-        "s3_bucket": "fai-tce-team26-data",
-        "dynamodb_table": "fai-tce-team26-telemetry",
-        "total_cadastral_parcels": len(orchestrator.spatial.list_surveys()),
+        "s3_integrated": False,
+        "dynamodb_integrated": False,
+        "total_cadastral_parcels": len(orchestrator.spatial.gdf_parcels_wgs84),
+        "distinct_survey_numbers": len(orchestrator.spatial.list_surveys()),
         "total_indexed_field_photos": len(orchestrator.vision.image_registry),
         "rag_knowledge_engine": k_status.get("rag_engine"),
         "faiss_indexed_documents": k_status.get("total_indexed_documents", 0),

@@ -14,12 +14,14 @@ from typing import Dict, Any, Optional, List, Tuple
 
 try:
     import boto3
+    from botocore.config import Config
     from botocore.exceptions import BotoCoreError, ClientError
     BOTO3_AVAILABLE = True
 except ImportError:
     BOTO3_AVAILABLE = False
 
 from farmsync.spatial.engine import SpatialEngine
+from farmsync.aws import create_client, validate_region
 
 
 class AmazonLocationServiceEngine:
@@ -51,6 +53,7 @@ class AmazonLocationServiceEngine:
             "AMAZON_LOCATION_GEOFENCE", "FARMSYNC_GeofenceCollection"
         )
         self.client: Optional[object] = None
+        self.last_live_checks = {}
         self._init_client()
 
         # Known regional agricultural supply depot (Vagaikulam SubStation / KVK)
@@ -67,29 +70,13 @@ class AmazonLocationServiceEngine:
 
     def _init_client(self) -> None:
         """Initialises boto3 Location client if credentials are configured."""
-        if not BOTO3_AVAILABLE:
-            self.client = None
-            return
-
-        has_keys = bool(
-            os.environ.get("AWS_ACCESS_KEY_ID")
-            and os.environ.get("AWS_SECRET_ACCESS_KEY")
-        )
-        if not has_keys:
+        self.last_live_checks = {}
+        if not BOTO3_AVAILABLE or os.getenv("FARMSYNC_OFFLINE", "false").lower() == "true":
             self.client = None
             return
 
         try:
-            ca_bundle = os.environ.get("AWS_CA_BUNDLE")
-            verify_opt = ca_bundle if ca_bundle else (os.environ.get("AWS_SSL_VERIFY", "true").lower() != "false")
-            self.client = boto3.client(
-                "location",
-                region_name=self.region,
-                aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-                aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-                aws_session_token=os.environ.get("AWS_SESSION_TOKEN"),
-                verify=verify_opt,
-            )
+            self.client = create_client("location", self.region)
         except Exception as exc:
             print(f"[AmazonLocationServiceEngine] client init failed: {exc}")
             self.client = None
@@ -102,10 +89,13 @@ class AmazonLocationServiceEngine:
         region: str = "ap-south-1",
     ) -> Dict[str, Any]:
         """Dynamically configure (or reconfigure) AWS credentials."""
+        validate_region(region)
         os.environ["AWS_ACCESS_KEY_ID"] = access_key_id
         os.environ["AWS_SECRET_ACCESS_KEY"] = secret_access_key
         if session_token:
             os.environ["AWS_SESSION_TOKEN"] = session_token
+        else:
+            os.environ.pop("AWS_SESSION_TOKEN", None)
         self.region = region
         self._init_client()
         return self.get_status()
@@ -117,11 +107,18 @@ class AmazonLocationServiceEngine:
     def get_status(self) -> Dict[str, Any]:
         """Returns operational status with an honest credential flag."""
         is_ready = self.client is not None
+        checks = getattr(self, "last_live_checks", {})
+        verified = all(checks.get(name, {}).get("success", False) for name in ("geocoding", "routing"))
         return {
             "service": "Amazon Location Service",
             "region": self.region,
             "aws_credentials_available": is_ready,
-            "connected": is_ready,
+            "client_initialized": is_ready,
+            "connected": verified,
+            "connection_verified": verified,
+            "last_live_checks": checks,
+            "cloud_location_enabled": os.getenv("FARMSYNC_AMAZON_LOCATION_ENABLED", "false").lower() == "true",
+            "challenge_service_note": "Cloud Location uses the separately assigned Builder-Location role when enabled. Parcel buffer audits always use local GIS.",
             "tier": (
                 "AWS Cloud Location (ap-south-1)"
                 if is_ready
@@ -129,7 +126,8 @@ class AmazonLocationServiceEngine:
             ),
             "place_index": self.place_index if is_ready else None,
             "route_calculator": self.route_calculator if is_ready else None,
-            "geofence_collection": self.geofence_collection if is_ready else None,
+            "geofence_collection": None,
+            "geofence_cloud_enabled": False,
             "features_available": {
                 "reverse_geocoding": {
                     "source": "Amazon Location Service" if is_ready else "LOCAL_REVENUE_INDEX",
@@ -144,7 +142,7 @@ class AmazonLocationServiceEngine:
                     "note": "Geofence audit always uses local SpatialEngine regardless of AWS status",
                 },
             },
-            "tls_verification_enabled": os.environ.get("AWS_SSL_VERIFY", "true").lower() != "false",
+            "tls_verification_enabled": True,
         }
 
     # ------------------------------------------------------------------
@@ -174,6 +172,7 @@ class AmazonLocationServiceEngine:
                 )
                 results = resp.get("Results", [])
                 if results:
+                    self.last_live_checks = {**getattr(self, "last_live_checks", {}), "geocoding": {"success": True}}
                     place = results[0].get("Place", {})
                     return {
                         "formatted_address": place.get("Label", ""),
@@ -187,6 +186,8 @@ class AmazonLocationServiceEngine:
                         "confidence": 0.98,
                     }
             except Exception as exc:
+                code = exc.response.get("Error", {}).get("Code") if isinstance(exc, ClientError) else type(exc).__name__
+                self.last_live_checks = {**getattr(self, "last_live_checks", {}), "geocoding": {"success": False, "error_code": code}}
                 print(
                     f"[AmazonLocationServiceEngine] reverse_geocode API error: {exc}. "
                     "Falling back to local revenue index."
@@ -194,17 +195,21 @@ class AmazonLocationServiceEngine:
 
         # ---- Local fallback (honestly labelled) ----
         s_label = f"Survey No. {survey_no}, " if survey_no else ""
+        parcel = self.spatial.get_parcel(survey_no) if survey_no else None
+        if parcel:
+            s_label = f"Survey No. {parcel['survey_no']}, "
+        village = parcel.get("village") if parcel else "Study area (exact village unresolved)"
+        taluk = parcel.get("taluk", "Thoothukudi") if parcel else "Thoothukudi"
+        district = parcel.get("district", "Thoothukudi") if parcel else "Thoothukudi"
         return {
             "formatted_address": (
-                f"{s_label}Keelathattaparai Revenue Village, "
-                "Thoothukudi Taluk, Thoothukudi District, "
-                "Tamil Nadu - 628103, India"
+                f"{s_label}{village}, {taluk} Taluk, {district} District, Tamil Nadu, India (dataset; not geocoded)"
             ),
-            "revenue_village": "Keelathattaparai",
-            "taluk": "Thoothukudi",
-            "district": "Thoothukudi",
+            "revenue_village": village,
+            "taluk": taluk,
+            "district": district,
             "state": "Tamil Nadu",
-            "postal_code": "628103",
+            "postal_code": None,
             "country": "IND",
             "source": "LOCAL_REVENUE_INDEX (static village-level address — not geocoded)",
             "aws_credentials_available": False,
@@ -238,12 +243,13 @@ class AmazonLocationServiceEngine:
         parcel = self.spatial.get_parcel(survey_no)
         if not parcel:
             raise ValueError(f"Parcel {survey_no} not found in cadastral index")
+        survey_no = parcel["survey_no"]
 
         dest_lat = parcel["centroid"]["latitude"]
         dest_lon = parcel["centroid"]["longitude"]
 
-        depot_lat = origin_lat or self.DEFAULT_DEPOT["latitude"]
-        depot_lon = origin_lon or self.DEFAULT_DEPOT["longitude"]
+        depot_lat = origin_lat if origin_lat is not None else self.DEFAULT_DEPOT["latitude"]
+        depot_lon = origin_lon if origin_lon is not None else self.DEFAULT_DEPOT["longitude"]
         depot_name = self.DEFAULT_DEPOT["name"]
 
         # ---- AWS path ----
@@ -255,6 +261,7 @@ class AmazonLocationServiceEngine:
                     DestinationPosition=[dest_lon, dest_lat],
                     TravelMode="Car",
                     DistanceUnit="Kilometers",
+                    IncludeLegGeometry=True,
                 )
                 summary = resp.get("Summary", {})
                 legs = resp.get("Legs", [{}])
@@ -263,6 +270,9 @@ class AmazonLocationServiceEngine:
                     if legs
                     else []
                 )
+                if len(geometry) < 2 or summary.get("Distance", 0) <= 0:
+                    raise ValueError("AWS route returned no usable geometry/distance")
+                self.last_live_checks = {**getattr(self, "last_live_checks", {}), "routing": {"success": True}}
 
                 return {
                     "survey_no": survey_no,
@@ -289,6 +299,8 @@ class AmazonLocationServiceEngine:
                     "aws_credentials_available": True,
                 }
             except Exception as exc:
+                code = exc.response.get("Error", {}).get("Code") if isinstance(exc, ClientError) else type(exc).__name__
+                self.last_live_checks = {**getattr(self, "last_live_checks", {}), "routing": {"success": False, "error_code": code}}
                 print(
                     f"[AmazonLocationServiceEngine] calculate_route API error: {exc}. "
                     "Falling back to local haversine estimate."

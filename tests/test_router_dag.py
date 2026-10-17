@@ -65,7 +65,7 @@ def test_dynamic_confidence_escalation():
     """
     Validates that router escalates based on measured confidence:
     - High confidence (0.98) -> Selects Accept_Student_Perception (saves $0.0045)
-    - Low confidence (0.45) -> Mathematically selects Claude-3.5-Sonnet-Teacher by argmax
+    - Low confidence (0.45) -> Mathematically selects Bedrock-Ministral-8B-Teacher by argmax
     """
     router = VerifiedUtilityRouter()
 
@@ -76,7 +76,7 @@ def test_dynamic_confidence_escalation():
 
     # Low-confidence / Ambiguous scenario (C = 0.45)
     route_uncertain = router.select_optimal_route("VERIFICATION_ESCALATION", measured_confidence=0.45)
-    assert route_uncertain["selected_route"] == "Claude-3.5-Sonnet-Teacher"
+    assert route_uncertain["selected_route"] == "Bedrock-Ministral-8B-Teacher"
     assert route_uncertain["estimated_cost_usd"] == 0.0045
     assert "Escalated to proprietary VLM" in route_uncertain["routing_rationale"]
 

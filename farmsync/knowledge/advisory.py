@@ -13,8 +13,10 @@ Architectural guarantees:
 import os
 import json
 import re
+import hashlib
 from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
+from farmsync.aws import create_client, EMBEDDING_MODEL, safe_error
 
 try:
     import faiss
@@ -57,6 +59,9 @@ class AgronomyKnowledgeEngine:
         self.faiss_index = None
         self.embedding_dim = 384
         self.similarity_threshold = 0.50
+        self.bedrock_client = None
+        self.embedding_cache = {}
+        self.embedding_error = None
 
         self._load_corpus()
         self._init_embedder()
@@ -74,8 +79,16 @@ class AgronomyKnowledgeEngine:
         else:
             self.corpus = []
 
-    def _init_embedder(self):
+    def _init_embedder(self, force_local=False):
         """Initializes dense sentence transformer embedder."""
+        if not force_local and os.getenv("FARMSYNC_EMBEDDINGS_PROVIDER", "local").lower() == "bedrock":
+            try:
+                self.bedrock_client = create_client("bedrock-runtime")
+                if self.bedrock_client is not None:
+                    self.embedding_dim = 256
+                    return
+            except Exception as exc:
+                self.embedding_error = safe_error(exc)
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
             self.model = None
             return
@@ -90,13 +103,29 @@ class AgronomyKnowledgeEngine:
 
         # Fallback to standard identifier
         try:
-            self.model = SentenceTransformer("all-MiniLM-L6-v2")
+            self.model = SentenceTransformer("all-MiniLM-L6-v2", local_files_only=True)
         except Exception as e:
             print(f"[AgronomyKnowledgeEngine] Note on embedder: {e}")
             self.model = None
 
     def _encode_text(self, texts: List[str]) -> np.ndarray:
         """Encodes text passages into normalized unit vectors for cosine similarity."""
+        if self.bedrock_client is not None:
+            vectors = []
+            for text in texts:
+                key = hashlib.sha256(text.encode()).hexdigest()
+                if key not in self.embedding_cache:
+                    result = self.bedrock_client.invoke_model(
+                        modelId=EMBEDDING_MODEL,
+                        body=json.dumps({"inputText": text, "dimensions": 256, "normalize": True}),
+                        contentType="application/json", accept="application/json"
+                    )
+                    vector = np.asarray(json.loads(result["body"].read())["embedding"], dtype=np.float32)
+                    if vector.shape != (256,) or not np.isfinite(vector).all() or np.linalg.norm(vector) == 0:
+                        raise ValueError("Invalid Titan embedding response")
+                    self.embedding_cache[key] = vector / np.linalg.norm(vector)
+                vectors.append(self.embedding_cache[key])
+            return np.asarray(vectors, dtype=np.float32)
         if self.model is not None:
             embs = self.model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
             return np.array(embs, dtype=np.float32)
@@ -108,7 +137,7 @@ class AgronomyKnowledgeEngine:
             words = re.findall(r'\w+', t.lower())
             v = np.zeros(dim, dtype=np.float32)
             for w in words:
-                idx = hash(w) % dim
+                idx = int.from_bytes(hashlib.sha256(w.encode()).digest()[:8], "big") % dim
                 v[idx] += 1.0
             norm = np.linalg.norm(v)
             if norm > 0:
@@ -122,15 +151,8 @@ class AgronomyKnowledgeEngine:
             self.faiss_index = None
             return
 
-        # Check if saved index exists and matches corpus length
-        if os.path.exists(self.index_path):
-            try:
-                idx = faiss.read_index(self.index_path)
-                if idx.ntotal == len(self.corpus):
-                    self.faiss_index = idx
-                    return
-            except Exception:
-                pass
+        # Rebuild the small corpus in memory: a count match cannot establish that
+        # persisted vectors use the current corpus, model, or hashing algorithm.
 
         # Build genuine FAISS vector index
         try:
@@ -142,10 +164,18 @@ class AgronomyKnowledgeEngine:
             embeddings = self._encode_text(doc_texts)
             index = faiss.IndexFlatIP(self.embedding_dim)
             index.add(embeddings)
-            faiss.write_index(index, self.index_path)
             self.faiss_index = index
         except Exception as e:
-            print(f"[AgronomyKnowledgeEngine] Error building FAISS index: {e}")
+            if self.bedrock_client is not None:
+                # Never combine cloud vectors and local vectors in one index.
+                self.embedding_error = safe_error(e)
+                self.bedrock_client = None
+                self.embedding_cache.clear()
+                self.embedding_dim = 384
+                self._init_embedder(force_local=True)
+                self._init_or_build_faiss_index()
+                return
+            print(f"[AgronomyKnowledgeEngine] Error building FAISS index: {safe_error(e)}")
             self.faiss_index = None
 
     def get_status(self) -> Dict[str, Any]:
@@ -155,7 +185,9 @@ class AgronomyKnowledgeEngine:
             "index_available": self.faiss_index is not None,
             "total_indexed_documents": len(self.corpus),
             "faiss_total_vectors": self.faiss_index.ntotal if self.faiss_index else 0,
-            "embedding_model": "all-MiniLM-L6-v2 (384-d)",
+            "embedding_model": EMBEDDING_MODEL if self.bedrock_client is not None else "all-MiniLM-L6-v2 (384-d)" if self.model is not None else "SHA256 term hashing (384-d)",
+            "embedding_backend": "AWS_BEDROCK" if self.bedrock_client is not None else "LOCAL",
+            "embedding_error": self.embedding_error,
             "similarity_metric": "Cosine Similarity (IndexFlatIP)",
             "similarity_threshold": self.similarity_threshold,
             "corpus_path": self.corpus_path,

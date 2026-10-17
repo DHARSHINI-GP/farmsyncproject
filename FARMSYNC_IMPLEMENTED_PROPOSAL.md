@@ -1,3 +1,5 @@
+> **Historical proposal / submission draft.** This document includes superseded architecture and unverified cloud claims. The organizer access guide and [HACKATHON_READINESS.md](HACKATHON_READINESS.md) govern the current implementation and live acceptance status.
+
 # FARMSYNC: Evidence-Driven Adaptive AI Orchestration for Geospatial Intelligence
 ## Production Implementation Proposal & System Specification
 
