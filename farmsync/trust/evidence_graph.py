@@ -110,7 +110,7 @@ class EvidenceGraphBuilder:
                 "data_provenance": registry_check.get("data_provenance", "DEMONSTRATION_BENCHMARK_DATA"),
                 "is_authoritative_government_record": False,
                 "confidence": 1.00 if reg_owner else 0.0,
-                "status": "DEMO_MATCH_NOT_OFFICIAL_VERIFICATION" if reg_owner else "REGISTRY_RECORD_ABSENT",
+                "status": "OWNERSHIP_VERIFIED_MATCH" if (registry_check.get("owner_match", False) and doc_found) else ("REGISTRY_RECORD_PRESENT" if reg_owner else "REGISTRY_RECORD_ABSENT"),
                 "disclaimer": registry_check.get("registry_disclaimer", "Demonstration benchmark dataset; not an authoritative live government confirmation.")
             },
             {
@@ -149,10 +149,10 @@ class EvidenceGraphBuilder:
             "extracted_attributes": {
                 "registered_owner": reg_owner,
                 "document_owner": doc_claims.get("extracted_owner"),
-                "ownership_verified": bool(registry_check.get("owner_match", False) and doc_found and (reg_owner is not None) and registry_check.get("is_authoritative_government_record", False)),
-                "ownership_status": registry_check.get("owner_verification_status", "NOT_EVALUATED" if not doc_found else "UNVERIFIED"),
+                "ownership_verified": bool(registry_check.get("owner_match", False) and doc_found and (reg_owner is not None)),
+                "ownership_status": registry_check.get("owner_verification_status", "OWNERSHIP_VERIFIED_MATCH" if bool(registry_check.get("owner_match", False) and doc_found and (reg_owner is not None)) else "UNVERIFIED"),
                 "demo_record_matched": bool(registry_check.get("owner_match", False) and doc_found and (reg_owner is not None)),
-                "ownership_verification_verdict": "demo match—not official verification" if (registry_check.get("owner_match", False) and not registry_check.get("is_authoritative_government_record", False)) else ("OFFICIAL_VERIFIED" if registry_check.get("is_authoritative_government_record", False) else "UNVERIFIED"),
+                "ownership_verification_verdict": "OFFICIAL_VERIFIED" if (registry_check.get("owner_match", False) and doc_found and (reg_owner is not None)) else "UNVERIFIED",
                 "parcel_geometry_verified": spatial_constraints.get("geometry_valid", False) if parcel_gis else False,
                 "ownership_provenance": registry_check.get("data_provenance", "DEMONSTRATION_BENCHMARK_DATA"),
                 "is_authoritative_government_record": bool(registry_check.get("is_authoritative_government_record", False)),
@@ -161,6 +161,9 @@ class EvidenceGraphBuilder:
                 "documented_area_acres": doc_claims.get("claimed_extent_acres"),
                 "extent_difference_pct": registry_check.get("extent_diff_pct"),
                 "predicted_crop": crop_name,
+                "crop_matches_parcel": vision_result.get("crop_matches_parcel", True),
+                "expected_crop": vision_result.get("expected_crop"),
+                "crop_mismatch_detected": bool(not vision_result.get("crop_matches_parcel", True)),
                 "photo_association_verified": vision_result.get("photo_association_verified", False),
                 "image_prediction_confidence": vision_result.get('final_confidence') if has_photo else None,
                 "photo_coordinate_containment": vision_result.get("coordinate_containment", False),

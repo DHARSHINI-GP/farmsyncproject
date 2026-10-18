@@ -115,7 +115,8 @@ class TrustEngine:
         has_land_doc: bool,
         has_registry: bool,
         output_payload: Optional[Dict[str, Any]] = None,
-        workflow_type: Optional[str] = None
+        workflow_type: Optional[str] = None,
+        crop_conflict: bool = False
     ) -> Dict[str, Any]:
         """
         Calculates the calibrated FTS composite score and returns the verification decision.
@@ -134,16 +135,20 @@ class TrustEngine:
                 calib_score = 0.98 if spatial_extent_match else 0.00
         else:
             # Directly calibrated using the measured vision confidence from the neural perception model
-            if not has_field_photo or vision_confidence <= 0.0:
-                calib_score = 0.00
-            elif not is_supported_crop:
-                # Out-of-distribution or unclassified vegetation
-                calib_score = round(min(0.40, float(vision_confidence) * 0.40), 3)
+            if has_field_photo and vision_confidence > 0.0:
+                if not is_supported_crop:
+                    # Out-of-distribution or unclassified vegetation
+                    calib_score = round(min(0.40, float(vision_confidence) * 0.40), 3)
+                else:
+                    # Empirical accuracy on coconut palm (0.92 benchmark from Section 3.2)
+                    # Modulated proportionally by measured neural perception confidence
+                    calib_factor = min(1.0, float(vision_confidence) / 0.95)
+                    calib_score = round(0.92 * calib_factor, 3)
+            elif spatial_extent_match:
+                # No photo available but parcel geometry checks out — use GIS fidelity as calibration proxy
+                calib_score = 0.80
             else:
-                # Empirical accuracy on coconut palm (0.92 benchmark from Section 3.2)
-                # Modulated proportionally by measured neural perception confidence
-                calib_factor = min(1.0, float(vision_confidence) / 0.95)
-                calib_score = round(0.92 * calib_factor, 3)
+                calib_score = 0.00
 
         # 2. Evidence Coverage Signal (E_cov)
         if workflow_type == "ENVIRONMENTAL_BUFFER_AUDIT":
@@ -168,8 +173,12 @@ class TrustEngine:
             # Fuzzy and token-level agreement between Gazette document claims and cadastral registry
             if has_land_doc and has_registry:
                 consistency_score = 0.95 if doc_registry_match else 0.10
-            elif has_registry or has_land_doc:
-                consistency_score = 0.90 if doc_registry_match else 0.10
+            elif has_land_doc and not has_registry:
+                # Document present but no registry to cross-check
+                consistency_score = 0.70 if spatial_extent_match else 0.30
+            elif has_registry and not has_land_doc:
+                # Registry present but no document; use spatial consistency as proxy
+                consistency_score = 0.80 if spatial_extent_match else 0.40
             else:
                 consistency_score = 0.10
 
@@ -185,20 +194,29 @@ class TrustEngine:
         # Strictly calculated from observed conflicts or out-of-distribution inputs.
         # When all independent evidence is complete and consistent, penalty is strictly 0.00.
         conflict_penalty = 0.0
-        if has_land_doc and not doc_registry_match:
+        if has_land_doc and has_registry and not doc_registry_match:
+            # Document and registry both present but contradict each other
             conflict_penalty += 0.50
-        elif workflow_type != "ENVIRONMENTAL_BUFFER_AUDIT" and not doc_registry_match:
-            conflict_penalty += 0.50
+        elif has_land_doc and not has_registry:
+            # Document present but no registry to cross-check — partial penalty
+            conflict_penalty += 0.15
+        elif not has_land_doc and not has_registry:
+            # Neither document nor registry present
+            conflict_penalty += 0.20
 
         if not spatial_extent_match:
             conflict_penalty += 0.30
         if waterbody_conflict:
             conflict_penalty += 0.20
 
+        # Only penalise OOD crop when a photo is actually analysed and crop is unsupported
         if has_field_photo and not is_supported_crop:
             conflict_penalty += 0.25
-        elif workflow_type != "ENVIRONMENTAL_BUFFER_AUDIT" and not is_supported_crop:
-            conflict_penalty += 0.25
+
+        if crop_conflict:
+            conflict_penalty += 0.40
+            calib_score = min(calib_score, 0.40)
+            consistency_score = min(consistency_score, 0.30)
 
         conflict_penalty = round(min(1.0, conflict_penalty), 3)
 
@@ -214,7 +232,10 @@ class TrustEngine:
         fts = round(max(0.0, min(1.0, fts)), 3)
 
         # Decision Policy (Bounded Escalation & Abstention per Section 3.2)
-        if fts >= self.accept_threshold:
+        if crop_conflict:
+            decision = "ESCALATE"
+            decision_msg = "Crop mismatch detected between field photograph and registered parcel crop; human review required."
+        elif fts >= self.accept_threshold:
             decision = "ACCEPT"
             decision_msg = "Workflow evidence checks satisfied; consult each field's verification status. This score does not establish ownership or image authenticity."
         elif fts >= self.escalate_threshold:

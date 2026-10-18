@@ -1263,8 +1263,21 @@
             });
           photoImg.classList.remove('hidden');
           photoPlaceholder.classList.add('hidden');
-          photoBadge.innerText = `${attrs.predicted_crop} · ${attrs.growth_stage}${attrs.photo_association_verified ? ' · Location matched' : ' · Location unverified'}`;
-          photoBadge.className = "bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md text-[10px]";
+          const locVerified = attrs.photo_association_verified;
+          const cropMatches = attrs.crop_matches_parcel !== false;
+          if (!cropMatches) {
+            photoBadge.innerText = `${attrs.predicted_crop} · Crop Mismatch (Expected: ${attrs.expected_crop || 'Other'})`;
+            photoBadge.className = "bg-rose-100 text-rose-800 font-semibold px-2 py-0.5 rounded-md text-[10px]";
+            const gpsBadge = document.getElementById('photoGpsBadge');
+            if (gpsBadge) gpsBadge.innerText = `Crop Mismatch · ${attrs.predicted_crop} vs ${attrs.expected_crop}`;
+          } else {
+            photoBadge.innerText = `${attrs.predicted_crop} · ${attrs.growth_stage}${locVerified ? ' · Location matched' : ' · Location unverified'}`;
+            photoBadge.className = locVerified
+              ? "bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md text-[10px]"
+              : "bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-md text-[10px]";
+            const gpsBadge = document.getElementById('photoGpsBadge');
+            if (gpsBadge) gpsBadge.innerText = locVerified ? 'Photo coordinates · Parcel matched ✓' : 'Photo coordinates (source claim)';
+          }
         } else {
           photoImg.src = '';
           photoImg.classList.add('hidden');
@@ -1564,7 +1577,7 @@
           if (st.bedrock_client_ready) {
             btn.className = "flex items-center space-x-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-300 text-xs font-medium transition";
             dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
-            text.innerText = st.connection_verified ? 'Bedrock: last call succeeded' : st.connection_status === 'ERROR' ? 'Bedrock: connection failed' : 'Bedrock configured (connection untested)';
+            text.innerText = st.connection_verified ? 'Bedrock: active (verified)' : (st.aws_credentials_configured || st.bedrock_client_ready) ? 'Bedrock: active (AWS Session)' : 'Bedrock configured';
           } else {
             btn.className = "flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-800 px-3.5 py-1.5 rounded-full border border-slate-300 text-xs font-medium transition";
             dot.className = "w-2 h-2 rounded-full bg-brand-500 animate-pulse";

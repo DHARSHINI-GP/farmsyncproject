@@ -99,6 +99,10 @@ class Runtime:
                     payload[field] = asset["path"]
                 else:
                     image_record = {"filename": value, "filepath": asset["path"], **asset["metadata"]}
+                    # Propagate survey_no from the request payload so the orchestrator
+                    # can verify the image is associated with the correct cadastral parcel.
+                    if payload.get("survey_no"):
+                        image_record["survey_no"] = str(payload["survey_no"]).strip()
             elif field == "document_path":
                 normalized = value.replace("\\", "/").casefold()
                 candidate = Path(value).resolve()
