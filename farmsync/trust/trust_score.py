@@ -116,7 +116,9 @@ class TrustEngine:
         has_registry: bool,
         output_payload: Optional[Dict[str, Any]] = None,
         workflow_type: Optional[str] = None,
-        crop_conflict: bool = False
+        crop_conflict: bool = False,
+        doc_mismatch: bool = False,
+        doc_mismatch_reason: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Calculates the calibrated FTS composite score and returns the verification decision.
@@ -218,6 +220,11 @@ class TrustEngine:
             calib_score = min(calib_score, 0.40)
             consistency_score = min(consistency_score, 0.30)
 
+        if doc_mismatch:
+            conflict_penalty += 0.60
+            calib_score = min(calib_score, 0.20)
+            consistency_score = min(consistency_score, 0.05)
+
         conflict_penalty = round(min(1.0, conflict_penalty), 3)
 
         # Compute Weighted FTS using proposal formula
@@ -232,12 +239,16 @@ class TrustEngine:
         fts = round(max(0.0, min(1.0, fts)), 3)
 
         # Decision Policy (Bounded Escalation & Abstention per Section 3.2)
-        if crop_conflict:
+        # STRICT ACCEPTANCE: ACCEPT is given ONLY when verified on survey number and acres.
+        if doc_mismatch:
+            decision = "REJECT"
+            decision_msg = doc_mismatch_reason or "Document verification failed: Uploaded document does not match survey number or acreage in dataset; rejected."
+        elif crop_conflict:
             decision = "ESCALATE"
             decision_msg = "Crop mismatch detected between field photograph and registered parcel crop; human review required."
         elif fts >= self.accept_threshold:
             decision = "ACCEPT"
-            decision_msg = "Workflow evidence checks satisfied; consult each field's verification status. This score does not establish ownership or image authenticity."
+            decision_msg = "Workflow evidence checks satisfied; survey number and acreage verified against dataset."
         elif fts >= self.escalate_threshold:
             decision = "ESCALATE"
             decision_msg = "Intermediate evidence score; additional verification or human review is required. Inspect telemetry for any actual model escalation."

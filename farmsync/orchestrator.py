@@ -246,7 +246,26 @@ class FarmSyncOrchestrator:
         verified_result["extracted_attributes"]["crop_matches_parcel"] = context.get("crop_matches_parcel", True)
         verified_result["extracted_attributes"]["expected_crop"] = context.get("expected_crop")
         verified_result["extracted_attributes"]["crop_mismatch_detected"] = bool(not context.get("crop_matches_parcel", True))
-        if reg_check.get("owner_match", False) and doc_claims.get("found"):
+        
+        doc_prov = bool(context.get("document_path"))
+        doc_ver = reg_check.get("document_verified", False)
+        doc_mis = reg_check.get("document_mismatch", False) or (doc_prov and not doc_ver)
+        verified_result["extracted_attributes"]["document_provided"] = doc_prov
+        verified_result["extracted_attributes"]["document_verified"] = doc_ver
+        verified_result["extracted_attributes"]["document_mismatch"] = doc_mis
+        verified_result["extracted_attributes"]["survey_match"] = reg_check.get("survey_match", False)
+        verified_result["extracted_attributes"]["extent_match"] = reg_check.get("extent_match", False)
+        verified_result["extracted_attributes"]["doc_survey_no"] = reg_check.get("doc_survey_no")
+        verified_result["extracted_attributes"]["target_survey_no"] = target_survey
+        verified_result["extracted_attributes"]["document_extent_acres"] = reg_check.get("document_extent_acres") or doc_claims.get("claimed_extent_acres")
+        verified_result["extracted_attributes"]["expected_acres"] = reg_check.get("official_extent_acres")
+        verified_result["extracted_attributes"]["doc_verification_details"] = reg_check.get("details")
+        verified_result["extracted_attributes"]["doc_verification_status"] = reg_check.get("verification_status", "ABSENT")
+
+        if doc_mis:
+            verified_result["extracted_attributes"]["ownership_verified"] = False
+            verified_result["extracted_attributes"]["ownership_status"] = "DOCUMENT_MISMATCH_REJECT"
+        elif reg_check.get("owner_match", False) and doc_claims.get("found"):
             verified_result["extracted_attributes"]["ownership_verified"] = True
             verified_result["extracted_attributes"]["ownership_status"] = "OWNERSHIP_VERIFIED_MATCH"
         verified_result["trust_metrics"]["score_kind"] = "HEURISTIC_EVIDENCE_SCORE_NOT_A_PROBABILITY"
@@ -653,9 +672,20 @@ class FarmSyncOrchestrator:
                     "fts_score": trust_result.get("fts_score")
                 }
 
+            doc_provided = bool(context.get("document_path"))
+            doc_verified = bool(reg_check.get("document_verified", False))
+            doc_mismatch = bool(reg_check.get("document_mismatch", False) or (doc_provided and not doc_verified))
+            doc_mismatch_reason = reg_check.get("details")
+
             if context.get("simulate_conflict"):
                 doc_reg_match = False
                 spatial_match = False
+            elif doc_mismatch:
+                doc_reg_match = False
+                spatial_match = False
+            elif doc_verified:
+                doc_reg_match = bool(reg_check.get("owner_match", False) or reg_check.get("demo_record_match", False)) if has_reg else False
+                spatial_match = (extent_check.get("verification_status") == "MATCH" or reg_check.get("extent_match", False))
             elif has_land_doc:
                 # Accept demo registry match as a positive consistency signal
                 doc_reg_match = bool(reg_check.get("owner_match", False) or reg_check.get("demo_record_match", False)) if has_reg else False
@@ -666,13 +696,18 @@ class FarmSyncOrchestrator:
                 spatial_match = bool(has_parcel and spatial_constraints.get("geometry_valid", False))
 
             # Ownership verified = registry owner match (no government record requirement)
-            has_demo_match = bool(direct_owner_match and has_land_doc)
-            ownership_verified = direct_owner_match   # True when doc owner == registry owner
-            ownership_status = (
-                "OWNERSHIP_VERIFIED_MATCH"
-                if direct_owner_match
-                else reg_check.get("owner_verification_status", "UNVERIFIED")
-            )
+            if doc_mismatch:
+                has_demo_match = False
+                ownership_verified = False
+                ownership_status = "DOCUMENT_MISMATCH_REJECT"
+            else:
+                has_demo_match = bool(direct_owner_match and has_land_doc)
+                ownership_verified = direct_owner_match   # True when doc owner == registry owner
+                ownership_status = (
+                    "OWNERSHIP_VERIFIED_MATCH"
+                    if direct_owner_match
+                    else reg_check.get("owner_verification_status", "UNVERIFIED")
+                )
             candidate_payload = {
                 "survey_number": str(context["survey_no"]) if context["survey_no"] else "UNSPECIFIED",
                 "village": context["village"],
@@ -689,7 +724,14 @@ class FarmSyncOrchestrator:
                     "growth_stage": context.get("final_stage"),
                     "crop_matches_parcel": context.get("crop_matches_parcel", True),
                     "expected_crop": context.get("expected_crop"),
-                    "crop_mismatch_detected": bool(not context.get("crop_matches_parcel", True))
+                    "crop_mismatch_detected": bool(not context.get("crop_matches_parcel", True)),
+                    "document_provided": doc_provided,
+                    "document_verified": doc_verified,
+                    "document_mismatch": doc_mismatch,
+                    "survey_match": reg_check.get("survey_match", False),
+                    "extent_match": reg_check.get("extent_match", False),
+                    "doc_survey_no": reg_check.get("doc_survey_no"),
+                    "expected_acres": reg_check.get("official_extent_acres")
                 },
                 "deterministic_spatial_checks": {
                     "spatial_extent_verified": spatial_match,
@@ -704,13 +746,15 @@ class FarmSyncOrchestrator:
                 spatial_extent_match=spatial_match,
                 waterbody_conflict=spatial_constraints.get("waterbody_buffer_conflict", False) if parcel_gis else False,
                 has_field_photo=has_photo,
-                has_land_doc=has_land_doc,
+                has_land_doc=bool(has_land_doc or doc_provided),
                 # Use demo registry presence (not only authoritative government records)
                 # so uploads against known parcels receive proper evidence-coverage credit.
                 has_registry=bool(has_reg and has_parcel),
                 output_payload=candidate_payload,
                 workflow_type=wf_type,
-                crop_conflict=bool(has_photo and not context.get("crop_matches_parcel", True))
+                crop_conflict=bool(has_photo and not context.get("crop_matches_parcel", True)),
+                doc_mismatch=doc_mismatch,
+                doc_mismatch_reason=doc_mismatch_reason
             )
             context["trust_result"] = trust_result
             return {

@@ -304,14 +304,45 @@ class AIAssistantEngine:
         doc_evidence = next((e for e in vobj.get("source_evidence", []) if e.get("source_type") == "DOCUMENT_OCR"), {})
         page_num = doc_evidence.get("page_number")
 
+        doc_prov = bool(attrs.get("document_provided"))
+        doc_ver = bool(attrs.get("document_verified"))
+        doc_mis = bool(attrs.get("document_mismatch"))
+        doc_surv_match = bool(attrs.get("survey_match"))
+        doc_ext_match = bool(attrs.get("extent_match"))
+        doc_surv_no = attrs.get("doc_survey_no")
+        exp_acres = attrs.get("expected_acres") or attrs.get("gis_area_acres")
+        doc_acres = attrs.get("document_extent_acres") or attrs.get("documented_area_acres")
+
+        if doc_mis:
+            ver_status = "MISMATCH"
+        elif doc_ver:
+            ver_status = "MATCH"
+        elif not doc_found:
+            ver_status = "ABSENT"
+        elif attrs.get('extent_difference_pct') is None:
+            ver_status = "UNRESOLVED"
+        elif attrs['extent_difference_pct'] <= 5.0:
+            ver_status = "MATCH"
+        else:
+            ver_status = "MISMATCH"
+
         doc = {
             "found": doc_found,
-            "document_name": doc_src or "Official Gazette Notice",
+            "document_provided": doc_prov,
+            "document_verified": doc_ver,
+            "document_mismatch": doc_mis,
+            "survey_match": doc_surv_match,
+            "extent_match": doc_ext_match,
+            "claimed_survey_no": doc_surv_no,
+            "target_survey_no": target_survey,
+            "expected_acres": exp_acres,
+            "document_name": doc_src or "Uploaded Land Document",
             "page_number": page_num,
             "page_count": None,
-            "claimed_extent_acres": attrs.get("documented_area_acres"),
-            "claimed_owner": attrs.get("document_owner") or "Not extracted (demo registry is not document evidence)",
-            "verification_status": ('ABSENT' if not doc_found else 'UNRESOLVED' if attrs.get('extent_difference_pct') is None else 'MATCH' if attrs['extent_difference_pct'] <= 5.0 else 'MISMATCH')
+            "claimed_extent_acres": doc_acres,
+            "claimed_owner": attrs.get("document_owner") or ("Survey mismatch in document" if doc_mis else "Not extracted"),
+            "verification_status": ver_status,
+            "mismatch_reason": attrs.get("doc_verification_details")
         }
         doc["variance_pct"] = attrs.get("extent_difference_pct")
         routing = vobj["routing_telemetry"]
@@ -329,10 +360,17 @@ class AIAssistantEngine:
         water_conflict = gis.get("waterbody_buffer_conflict", False)
 
         # Step 3: Build Chain-of-Thought (CoT) Trace (Attributed honestly to GeoPandas/Shapely UTM 44N)
+        if doc_mis:
+            doc_step = f"3. Document Verification: FAILED (REJECTED). {attrs.get('doc_verification_details') or 'Uploaded document does not match parcel survey number or acreage in dataset.'}"
+        elif doc_ver:
+            doc_step = f"3. Document Verification: PASSED (ACCEPTED). Survey {target_survey} and {doc_acres} ac match parcel dataset."
+        else:
+            doc_step = f"3. Document Verification: Legal document claimed {doc['claimed_extent_acres']} ac for '{doc['claimed_owner']}'. Registry verification status: {doc['verification_status']}."
+
         thought_steps = [
             f"1. Entity Extraction: Identified target parcel Survey {target_survey} in {vobj['village']}, Thoothukudi.",
             f"2. Deterministic GIS: GeoPandas/Shapely (UTM Zone 44N) computed polygon area: {gis_area} ac, road proximity: {dist_road}m, waterbody clearance: {dist_water}m.",
-            f"3. Document Verification: Legal document claimed {doc['claimed_extent_acres']} ac for '{doc['claimed_owner']}'. Registry verification status: {doc['verification_status']}.",
+            doc_step,
             f"4. Multimodal Vision: {vision_trace}",
             f"5. Agronomy Retrieval: Indexed TNAU/ICAR agronomic package for {attrs.get('predicted_crop')}. Retrieved protocol from '{adv.get('citation_source')}'.",
             f"6. FTS Trust Synthesis: Synthesized 5 independent signals into FarmwiseAI Trust Score = {trust.get('task_trust_score_fts', 0.0)}/1.0. Verification Decision: {trust.get('verification_status')}."
@@ -466,7 +504,14 @@ class AIAssistantEngine:
         doc_name = doc.get("document_name") or "Land Acquisition Notice"
 
         # Section 1: Executive Audit Summary
-        if not found_in_doc:
+        if doc.get("document_mismatch"):
+            paragraphs.append(
+                f"### Executive Summary: Document Discrepancy Flagged\n"
+                f"Survey Number **{survey_no}** in {attrs.get('village', 'the study area')} exhibits a critical document conflict. "
+                f"{doc.get('mismatch_reason') or 'Uploaded document features do not match the cadastral parcel dataset.'} "
+                f"The verification decision is `{trust.get('verification_status')}`. Feature verification (Survey Number and Acres) failed."
+            )
+        elif not found_in_doc:
             paragraphs.append(
                 f"### Executive Summary: Document Evidence Unavailable\n"
                 f"Survey Number **{survey_no}** in {attrs.get('village', 'the study area')} was audited against `{doc_name}`. "

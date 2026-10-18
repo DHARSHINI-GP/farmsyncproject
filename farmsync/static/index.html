@@ -1200,27 +1200,32 @@
           const badge = document.getElementById('docStatusBadge');
           const varElem = document.getElementById('docVarianceText');
 
-          if (doc.found) {
-            if (ownElem) ownElem.innerText = doc.claimed_owner || "Owner not extracted";
-            if (stgElem) stgElem.innerText = doc.gazette_section || "Land Acquisition Notice";
-            if (extElem) extElem.innerText = doc.claimed_extent_acres == null ? 'Extent missing or unit ambiguous' : `${doc.claimed_extent_acres} ac (source claim)`;
-            if (docArea) docArea.innerText = doc.claimed_extent_acres == null ? 'Not extracted' : `${doc.claimed_extent_acres} Acres`;
+          if (doc.document_mismatch || doc.verification_status === "MISMATCH" || doc.verification_status === "VERIFIED_REJECT") {
+            if (ownElem) ownElem.innerText = doc.mismatch_reason || doc.claimed_owner || "Document Mismatch";
+            if (stgElem) stgElem.innerText = "Feature Check: Survey & Acres";
+            if (extElem) extElem.innerText = doc.claimed_extent_acres == null ? 'Extent missing in doc' : `${doc.claimed_extent_acres} ac (Doc: Survey ${doc.claimed_survey_no || 'Mismatch'})`;
+            if (docArea) docArea.innerText = doc.claimed_extent_acres == null ? 'Mismatch' : `${doc.claimed_extent_acres} Acres`;
+            if (badge) {
+              badge.innerText = "MISMATCH · REJECT";
+              badge.className = "text-[9px] bg-rose-100 text-rose-900 font-mono px-2 py-0.5 rounded font-bold";
+            }
+            if (varElem) {
+              varElem.innerText = `MISMATCH · Expected Survey ${res.target_survey_no} (${doc.expected_acres ?? ''} ac)`;
+              varElem.className = "text-rose-600 font-bold";
+            }
+          } else if (doc.found && (doc.verification_status === "MATCH" || doc.document_verified)) {
+            if (ownElem) ownElem.innerText = doc.claimed_owner || "Owner verified";
+            if (stgElem) stgElem.innerText = doc.gazette_section || "Verified Land Document";
+            if (extElem) extElem.innerText = `${doc.claimed_extent_acres} ac (Survey ${res.target_survey_no} matched ✓)`;
+            if (docArea) docArea.innerText = `${doc.claimed_extent_acres} Acres`;
 
             if (badge) {
-              badge.innerText = doc.source_method || "PDF TABLE";
+              badge.innerText = "VERIFIED · ACCEPT";
               badge.className = "text-[9px] bg-emerald-100 text-emerald-900 font-mono px-2 py-0.5 rounded font-bold";
             }
             if (varElem) {
-              if (doc.verification_status === "MATCH") {
-                varElem.innerText = `${doc.variance_pct}% (MATCH)`;
-                varElem.className = "text-emerald-600 font-bold";
-              } else if (doc.verification_status === 'UNRESOLVED') {
-                varElem.innerText = 'UNRESOLVED (missing extent or parcel identity)';
-                varElem.className = 'text-amber-700 font-bold';
-              } else {
-                varElem.innerText = `${doc.variance_pct}% (DISCREPANCY)`;
-                varElem.className = "text-rose-600 font-bold";
-              }
+              varElem.innerText = `${doc.variance_pct || 0}% (MATCH)`;
+              varElem.className = "text-emerald-600 font-bold";
             }
           } else {
             if (ownElem) ownElem.innerText = "Not Recorded in Notice";

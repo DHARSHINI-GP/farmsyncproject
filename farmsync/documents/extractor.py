@@ -501,26 +501,86 @@ class DocumentRegistryEngine:
         try:
             records, notices = self.extract_source_claims(resolved_full_path)
         except Exception as exc:
-            return {"found": False, "survey_no": clean_no, "document_source": rel_doc_name,
+            return {"found": False, "survey_no": clean_no, "target_survey_no": clean_no,
+                    "document_source": rel_doc_name, "document_provided": bool(doc_path),
                     "extracted_owner": None, "claimed_extent_acres": None,
+                    "survey_match": False, "survey_mismatch": True,
                     "status": "DOCUMENT_PARSE_FAILED", "error": type(exc).__name__}
+
+        # Fallback text scan if no structured records were found
+        if not records:
+            try:
+                with pdfplumber.open(resolved_full_path) as pdf:
+                    full_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+                    s_matches = re.findall(r'(?:survey(?:\s*(?:number|no\.?))?|s\.?\s*f\.?\s*no\.?|s\.?\s*no\.?|புல எண்|சர்வே)\s*[:#-]?\s*(\d+(?:/\d+[A-Za-z]*)?)\b', full_text, re.I)
+                    e_matches = re.findall(r'(?:extent|area|விஸ்தீரணம்|பரப்பளவு)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(acres?|ac|ha|hectares?|ஏக்கர்|ஹெக்டேர்)?\b', full_text, re.I)
+                    if s_matches:
+                        from farmsync.documents.evidence import area_acres
+                        ext_val = None
+                        if e_matches:
+                            val_str, unit_str = e_matches[0]
+                            ext_val = area_acres(val_str, unit_str or "acres")
+                        for sm in s_matches:
+                            records.append({
+                                "found": True,
+                                "survey_no": sm,
+                                "claimed_extent_acres": ext_val,
+                                "extracted_owner": None,
+                                "document_village": None,
+                                "page_number": 1,
+                                "extraction_method": "pdfplumber_text_scan",
+                                "document_source": rel_doc_name
+                            })
+            except Exception:
+                pass
+
+        # Check Feature 1: Survey Number match
         matches = [r for r in records if r["survey_no"].casefold() == clean_no.casefold()]
         if not matches:
-            return {"found": False, "survey_no": clean_no, "document_source": rel_doc_name,
-                    "extracted_owner": None, "claimed_extent_acres": None,
-                    "status": "SURVEY_NOT_FOUND", "notices": notices,
-                    "error": "No explicitly identified survey row was extracted; no fallback values were substituted."}
+            extracted_surveys = list(dict.fromkeys(r["survey_no"] for r in records if r.get("survey_no")))
+            extracted_extents = [r.get("claimed_extent_acres") for r in records if r.get("claimed_extent_acres") is not None]
+            doc_survey = extracted_surveys[0] if extracted_surveys else None
+            doc_extent = extracted_extents[0] if extracted_extents else None
+            doc_owner = records[0].get("extracted_owner") if records else None
+            doc_village = records[0].get("document_village") if records else None
+            return {
+                "found": False,
+                "survey_no": clean_no,
+                "target_survey_no": clean_no,
+                "doc_survey_no": doc_survey,
+                "document_source": rel_doc_name,
+                "document_provided": bool(doc_path),
+                "extracted_owner": doc_owner,
+                "claimed_extent_acres": doc_extent,
+                "document_village": doc_village,
+                "extracted_surveys": extracted_surveys,
+                "survey_match": False,
+                "survey_mismatch": True,
+                "status": "SURVEY_NUMBER_MISMATCH" if doc_survey else "SURVEY_NOT_FOUND",
+                "notices": notices,
+                "error": f"Uploaded document contains Survey {doc_survey or 'None'}, which does NOT match target Survey {clean_no}." if doc_survey else "No explicitly identified survey row was extracted; no fallback values were substituted."
+            }
+
         values = {(r.get("extracted_owner"), r.get("claimed_extent_acres"), r.get("document_village")) for r in matches}
         if len(values) > 1:
-            return {"found": False, "survey_no": clean_no, "document_source": rel_doc_name,
+            return {"found": False, "survey_no": clean_no, "target_survey_no": clean_no,
+                    "document_source": rel_doc_name, "document_provided": bool(doc_path),
                     "extracted_owner": None, "claimed_extent_acres": None,
+                    "survey_match": True, "survey_mismatch": False,
                     "status": "AMBIGUOUS_DOCUMENT_ROWS", "observations": matches,
                     "error": "Multiple different claims require village/subdivision identification or human review."}
+
         # The envelope must be distinct from its source observations. Otherwise
         # observations[0] points back to result and durable JSON export fails.
         result = deepcopy(matches[0])
         result["notices"] = notices
         result["observations"] = matches
+        result["survey_match"] = True
+        result["survey_mismatch"] = False
+        result["target_survey_no"] = clean_no
+        result["doc_survey_no"] = result.get("survey_no", clean_no)
+        result["document_provided"] = bool(doc_path)
+        result["document_source"] = rel_doc_name
         if simulate_mismatch:
             result = dict(result)
             result["extracted_owner"] = "Simulated conflicting claimant"
@@ -645,39 +705,66 @@ class DocumentRegistryEngine:
             extent_diff_pct = None
             extent_match = False
 
-        # Case 1: Document claims were NOT found in the PDF
-        if not doc_found:
+        doc_provided = bool(document_claims.get("document_provided", False))
+        survey_match = bool(document_claims.get("survey_match", False))
+        doc_survey = document_claims.get("doc_survey_no")
+
+        # Case 1: Document claims were NOT found in the PDF or survey mismatch
+        if not doc_found or not survey_match:
             reg_owner = revenue_record.get("registered_owner") if ror_found else None
+            mismatch_details = (
+                f"Document verification failed: Survey number mismatch. Uploaded PDF contains Survey {doc_survey or 'Unknown'} ({doc_extent} acres), which does NOT match target parcel Survey {survey_no} ({official_extent} acres) in dataset."
+                if doc_provided else
+                document_claims.get("error", f"Survey {survey_no} not found in provided document")
+            )
             return {
                 "survey_no": survey_no,
+                "target_survey_no": survey_no,
+                "doc_survey_no": doc_survey,
+                "document_provided": doc_provided,
                 "registry_found": ror_found,
                 "cadastral_found": cad_found,
-                "document_found": False,
+                "document_found": doc_found,
+                "document_verified": False,
+                "document_mismatch": bool(doc_provided),
+                "survey_match": False,
+                "extent_match": False,
                 "official_owner": reg_owner,
-                "document_owner": None,
+                "document_owner": document_claims.get("extracted_owner"),
                 "patta_number": revenue_record.get("patta_number") if ror_found else None,
                 "owner_match": False,
-                "owner_verification_status": "DOCUMENT_EVIDENCE_MISSING",
-                "extent_match": False,
-                "status": "DOCUMENT_EVIDENCE_MISSING",
+                "owner_verification_status": "SURVEY_NUMBER_MISMATCH" if doc_provided else "DOCUMENT_EVIDENCE_MISSING",
+                "status": "SURVEY_NUMBER_MISMATCH" if doc_provided else "DOCUMENT_EVIDENCE_MISSING",
+                "verification_status": "VERIFIED_REJECT" if doc_provided else "ABSENT",
                 "data_provenance": revenue_record.get("data_provenance", "DEMONSTRATION_BENCHMARK_DATA") if ror_found else None,
                 "source_authority": revenue_record.get("source_authority", "TamilNilam Revenue Record of Rights Schema (Demonstration Fixture)") if ror_found else None,
                 "is_authoritative_government_record": False,
                 "last_verified_date": revenue_record.get("last_verified_date", "2024-03-15") if ror_found else None,
                 "registry_disclaimer": "Demonstration benchmark dataset; not an authoritative live government confirmation." if ror_found else "No record in demonstration registry.",
-                "details": document_claims.get("error", f"Survey {survey_no} not found in provided document"),
+                "details": mismatch_details,
                 "official_extent_acres": official_extent,
+                "document_extent_acres": doc_extent,
+                "extent_diff_acres": round(extent_diff, 3) if extent_diff is not None else None,
+                "extent_diff_pct": round(extent_diff_pct, 2) if extent_diff_pct is not None else None,
                 "document_source": document_claims.get("document_source")
             }
 
         # Case 2: Document claims exist, but NO independent Revenue Registry record exists
         if not ror_found:
             doc_owner = document_claims.get("extracted_owner")
+            doc_ver = bool(survey_match and extent_match)
             return {
                 "survey_no": survey_no,
+                "target_survey_no": survey_no,
+                "doc_survey_no": doc_survey,
+                "document_provided": doc_provided,
                 "registry_found": False,
                 "cadastral_found": cad_found,
                 "document_found": True,
+                "document_verified": doc_ver,
+                "document_mismatch": bool(not doc_ver if doc_provided else False),
+                "survey_match": survey_match,
+                "extent_match": extent_match,
                 "official_owner": None,  # NEVER report doc_owner as official_owner!
                 "document_owner": doc_owner,
                 "patta_number": None,
@@ -692,19 +779,22 @@ class DocumentRegistryEngine:
                 "document_extent_acres": doc_extent,
                 "extent_diff_acres": round(extent_diff, 3) if cad_found else None,
                 "extent_diff_pct": round(extent_diff_pct, 2) if cad_found else None,
-                "extent_match": extent_match if cad_found else False,
+                "verification_status": "VERIFIED_ACCEPT" if doc_ver else "VERIFIED_REJECT",
                 "document_source": document_claims.get("document_source"),
                 "village": cad_record.get("village") if cad_found else None,
                 "taluk": cad_record.get("taluk") if cad_found else None,
                 "status": "UNVERIFIED_NO_REGISTRY_RECORD",
-                "details": f"Document claims owner '{doc_owner}', but no independent land registry record exists for survey {survey_no} in the Revenue Record of Rights. Ownership is unverified."
+                "details": f"Document claims Survey {survey_no} with {doc_extent} acres, but no independent land registry record exists for survey {survey_no} in the Revenue Record of Rights."
             }
 
-        # Case 3: Both Revenue Registry record and Document claims exist -> Genuine Cross-Check!
+        # Case 3: Both Revenue Registry record and Document claims exist -> Verify Survey and Acres!
         reg_owner = revenue_record.get("registered_owner")
         doc_owner = document_claims.get("extracted_owner", "")
         owner_match = self._verify_owner_match(doc_owner, reg_owner)
         is_authoritative = bool(revenue_record.get("is_authoritative_government_record", False))
+
+        document_verified = bool(survey_match and extent_match)
+        document_mismatch = bool(doc_provided and not document_verified)
 
         if not doc_owner:
             owner_status = 'DOCUMENT_OWNER_MISSING'
@@ -713,24 +803,36 @@ class DocumentRegistryEngine:
         else:
             owner_status = "OWNERSHIP_DISCREPANCY_DETECTED"
 
-        if not doc_owner or doc_extent is None:
-            overall_status = 'INCOMPLETE_DOCUMENT_EVIDENCE'
-        elif owner_match and extent_match:
+        if document_mismatch:
+            if not survey_match:
+                overall_status = "SURVEY_NUMBER_MISMATCH"
+                ver_status = "VERIFIED_REJECT"
+                details_msg = f"Document verification failed: Survey number mismatch. Uploaded PDF contains Survey {doc_survey or 'Unknown'} ({doc_extent} acres), but target parcel is Survey {survey_no} ({official_extent} acres) in dataset. Status: REJECTED."
+            else:
+                overall_status = "EXTENT_ACRES_MISMATCH"
+                ver_status = "VERIFIED_REJECT"
+                details_msg = f"Document verification failed: Acres mismatch. Uploaded PDF claims {doc_extent} acres for Survey {survey_no}, but parcel record in dataset is {official_extent} acres (variance {extent_diff_pct:.2f}% exceeds tolerance). Status: REJECTED."
+        elif document_verified:
             overall_status = "CONSISTENT_OFFICIAL_MATCH"
+            ver_status = "VERIFIED_ACCEPT"
+            details_msg = f"Document feature verification passed: Survey {survey_no} and extent {doc_extent} acres match parcel record in dataset ({official_extent} acres). Status: ACCEPTED."
         else:
-            overall_status = "DISCREPANCY_DETECTED"
-
-        details_msg = (
-            f"Ownership verified against Record of Rights: Document claimant '{doc_owner}' matches registered owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')})."
-            if owner_match else
-            ("Document owner was not extracted; ownership comparison is unresolved." if not doc_owner else f"Ownership discrepancy detected: Document claimant '{doc_owner}' does NOT match Record of Rights owner '{reg_owner}' (Patta #{revenue_record.get('patta_number')}).")
-        )
+            overall_status = "INCOMPLETE_DOCUMENT_EVIDENCE"
+            ver_status = "UNRESOLVED"
+            details_msg = f"Document claims for Survey {survey_no} are incomplete or unverified."
 
         return {
             "survey_no": survey_no,
+            "target_survey_no": survey_no,
+            "doc_survey_no": doc_survey,
+            "document_provided": doc_provided,
             "registry_found": True,
             "cadastral_found": cad_found,
             "document_found": True,
+            "document_verified": document_verified,
+            "document_mismatch": document_mismatch,
+            "survey_match": survey_match,
+            "extent_match": extent_match,
             "official_owner": reg_owner,  # STRICTLY from independent revenue registry!
             "document_owner": doc_owner,
             "patta_number": revenue_record.get("patta_number"),
@@ -747,7 +849,7 @@ class DocumentRegistryEngine:
             "document_extent_acres": doc_extent,
             "extent_diff_acres": round(extent_diff, 3) if extent_diff is not None else None,
             "extent_diff_pct": round(extent_diff_pct, 2) if extent_diff_pct is not None else None,
-            "extent_match": extent_match,
+            "verification_status": ver_status,
             "land_classification": revenue_record.get("land_classification") or document_claims.get("land_classification"),
             "document_source": document_claims.get("document_source"),
             "village": revenue_record.get("village") or (cad_record.get("village") if cad_found else "Keelathattaparai"),
