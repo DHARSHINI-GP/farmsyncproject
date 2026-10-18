@@ -156,57 +156,46 @@
         <div class="p-4 border-b border-slate-100">
           <div class="flex items-center justify-between mb-3">
             <div>
-              <h2 class="text-base font-bold text-slate-900 tracking-tight flex items-center space-x-1.5">
+              <h2 class="text-base font-bold text-slate-900 tracking-tight flex items-center space-x-2">
                 <span>Cadastral Parcels</span>
-                <span id="loadedParcelsCountBadge" class="bg-brand-50 text-brand-700 text-[11px] px-2 py-0.5 rounded-full font-bold">396 Live</span>
+                <span id="loadedParcelsCountBadge" class="bg-emerald-50 text-emerald-700 text-[11px] px-2 py-0.5 rounded-full font-bold border border-emerald-200/60">396 Live</span>
               </h2>
-              <p class="text-[11px] text-slate-400">Seven villages · Thoothukudi study area</p>
+              <p class="text-xs text-slate-400 mt-0.5">Seven villages &middot; Thoothukudi study area</p>
             </div>
-            <button onclick="triggerVerification()" id="runBtn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-brand-500/20 transition active:scale-95">
+            <button onclick="triggerVerification()" id="runBtn" class="flex items-center space-x-1.5 px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-brand-500/20 transition active:scale-95 shrink-0">
               <i data-lucide="play" class="w-3.5 h-3.5 fill-white"></i>
               <span>Verify Active</span>
             </button>
           </div>
 
-          <!-- Segmented Filter Switcher -->
-          <div class="bg-slate-100 p-1 rounded-xl flex items-center text-xs font-semibold mb-2.5">
-            <button onclick="filterTable('all')" id="tabAll" class="flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition">All (<span id="totalCount">396</span>)</button>
-            <button onclick="filterTable('flagged')" id="tabFlagged" class="flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition">Discrepant (<span id="flaggedCount">2</span>)</button>
-            <button onclick="filterTable('redteam')" id="tabRedTeam" class="flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition">Red-Team</button>
+          <!-- Search Bar with precise vertical centering and padding -->
+          <div class="relative flex items-center">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="search" class="w-4 h-4"></i>
+            </span>
+            <input
+              type="text"
+              id="searchInput"
+              onkeyup="handleSearch()"
+              placeholder="Search survey no (e.g. 384, 176, 381)..."
+              style="padding-left: 2.25rem;"
+              class="w-full h-9 bg-slate-50 hover:bg-slate-100/60 focus:bg-white border border-slate-200 rounded-xl pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition shadow-2xs"
+            />
           </div>
 
-          <!-- Search Bar -->
-          <div class="relative">
-            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
-            <input type="text" id="searchInput" onkeyup="handleSearch()" placeholder="Search survey no (e.g. 384, 176, 381)..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition" />
-          </div>
-
-          <!-- Red-Team Simulation Drawer (Collapsible) -->
-          <div id="redTeamDrawer" class="hidden mt-2.5 p-2.5 bg-amber-50/80 border border-amber-200/60 rounded-xl text-xs">
-            <div class="font-bold text-amber-900 flex items-center space-x-1.5 mb-1.5">
-              <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-amber-600"></i>
-              <span>Red-Team Adversarial Toggles:</span>
-            </div>
-            <div class="space-y-1">
-              <label class="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" id="simEscalate" class="rounded text-brand-600 focus:ring-brand-500">
-                <span class="text-slate-700 text-[11px]">Simulate Low-Confidence Photo (Teacher Escalation)</span>
-              </label>
-                <label class="simulation-control flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" id="simConflict" class="rounded text-brand-600 focus:ring-brand-500">
-                <span class="text-slate-700 text-[11px]">Inject Legal Extent Discrepancy (Refuse-to-Invent)</span>
-              </label>
-            </div>
-          </div>
+          <!-- Hidden simulation controls for backend query compatibility -->
+          <input type="checkbox" id="simEscalate" class="hidden">
+          <input type="checkbox" id="simConflict" class="hidden">
         </div>
 
         <!-- Master Parcels Table -->
         <div class="flex-1 overflow-y-auto custom-scrollbar">
-          <div class="px-4 py-1.5 flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50/60 sticky top-0 z-10 backdrop-blur-xs">
-            <span class="w-2/5">Parcel / Survey</span>
-            <span class="w-1/4">Crop</span>
-            <span class="w-1/4 text-center">Audit Status</span>
-            <span class="w-8 text-right">View</span>
+          <div class="px-4 py-2 flex items-center text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50/90 sticky top-0 z-10 backdrop-blur-xs">
+            <div class="w-9 shrink-0 flex items-center justify-center text-slate-400">
+              <i data-lucide="check" class="w-3 h-3"></i>
+            </div>
+            <div class="flex-1 min-w-0">Parcel / Survey</div>
+            <div class="w-10 shrink-0 text-center">View</div>
           </div>
 
           <div id="parcelListContainer" class="divide-y divide-slate-100">
@@ -219,10 +208,10 @@
         </div>
 
         <!-- Bottom Status Bar -->
-        <div class="h-12 border-t border-slate-100 px-4 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50 shrink-0">
-          <div class="flex items-center space-x-1.5">
-            <span class="font-medium">Selected:</span>
-            <span id="activeSurveyBadge" class="font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded-md text-xs">Survey 384</span>
+        <div class="h-11 border-t border-slate-100 px-4 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50 shrink-0">
+          <div class="flex items-center space-x-2">
+            <span class="font-medium text-slate-500">Selected:</span>
+            <span id="activeSurveyBadge" class="font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded-md text-xs shadow-2xs">Survey 384</span>
           </div>
           <span class="text-[11px] text-slate-400 font-mono">EPSG:32644 (UTM 44N)</span>
         </div>
@@ -257,69 +246,52 @@
 
           <button id="cancelAnalysisBtn" onclick="cancelActiveAnalysis()" class="hidden pointer-events-auto self-end rounded-lg bg-white text-rose-700 px-3 py-1 text-xs">Cancel analysis</button>
           <p id="photoUploadStatus" role="status" aria-live="polite" class="hidden pointer-events-auto bg-white text-slate-700 rounded-lg px-3 py-2 text-xs"></p>
-          <!-- Document Selector & Quick Prompts Row -->
-          <div class="glass-card px-3 py-1.5 rounded-xl border border-white/80 shadow-md flex items-center space-x-2 pointer-events-auto text-xs">
-            <label for="compactViewSelect" class="compact-view-picker font-bold text-slate-700">View</label>
-            <select id="compactViewSelect" onchange="switchMode(this.value)" class="compact-view-picker bg-transparent text-xs" aria-label="Workspace view">
-              <option value="explorer">Explorer</option>
-              <option value="audit">Cadastral audit</option>
-              <option value="ai">AI reasoning</option>
-              <option value="telemetry">Router telemetry</option>
-            </select>
-            <label for="aiModelSelect" class="font-bold text-slate-700 shrink-0">AI model</label>
-            <select id="aiModelSelect" onchange="saveModelPreference(this.value)" aria-describedby="aiModelHelp" class="bg-transparent text-xs font-medium text-slate-800">
-              <option value="mistral.ministral-3-3b-instruct">Ministral 3B</option>
-              <option value="mistral.ministral-3-8b-instruct">Ministral 8B</option>
-            </select>
-            <span id="aiModelHelp" class="text-[10px] text-slate-500">Used for the next AI request</span>
-          </div>
-          <div class="flex items-center space-x-2 pointer-events-auto overflow-x-auto no-scrollbar">
+          <!-- Controls Row: View, Model, Notice Document, Photo -->
+          <div class="flex items-center flex-wrap gap-2 pointer-events-auto">
+            <!-- View Mode & AI Model -->
+            <div class="glass-card px-3 py-1.5 rounded-xl border border-white/80 shadow-md flex items-center space-x-2 shrink-0 text-xs">
+              <label for="compactViewSelect" class="compact-view-picker font-bold text-slate-700">View</label>
+              <select id="compactViewSelect" onchange="switchMode(this.value)" class="compact-view-picker bg-transparent text-xs cursor-pointer" aria-label="Workspace view">
+                <option value="explorer">Explorer</option>
+                <option value="audit">Cadastral audit</option>
+                <option value="ai">AI reasoning</option>
+                <option value="telemetry">Router telemetry</option>
+              </select>
+              <span class="text-slate-300">|</span>
+              <label for="aiModelSelect" class="font-bold text-slate-700 shrink-0">AI model</label>
+              <select id="aiModelSelect" onchange="saveModelPreference(this.value)" aria-describedby="aiModelHelp" class="bg-transparent text-xs font-medium text-slate-800 cursor-pointer">
+                <option value="mistral.ministral-3-3b-instruct">Ministral 3B</option>
+                <option value="mistral.ministral-3-8b-instruct">Ministral 8B</option>
+              </select>
+              <span id="aiModelHelp" class="text-[10px] text-slate-400 hidden lg:inline">Used for AI request</span>
+            </div>
+
             <!-- Document Picker Pill -->
-            <div class="glass-card px-3 py-1.5 rounded-full border border-white/80 shadow-md flex items-center space-x-1.5 shrink-0 text-xs">
+            <div class="glass-card px-3 py-1.5 rounded-xl border border-white/80 shadow-md flex items-center space-x-1.5 shrink-0 text-xs">
               <i data-lucide="file-text" class="w-3.5 h-3.5 text-amber-600 shrink-0"></i>
               <span class="font-bold text-slate-700 text-[10px] uppercase tracking-wider shrink-0">Notice:</span>
               <select id="docSelectDropdown" class="bg-transparent font-medium text-slate-800 focus:outline-none text-xs max-w-[210px] truncate cursor-pointer">
                 <option value="">Auto-Detect (71 Official PDFs)</option>
               </select>
-              <button onclick="document.getElementById('pdfUploadInput').click()" class="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-full text-[10px] font-bold transition flex items-center space-x-1 shrink-0" title="Upload Custom Land Acquisition PDF">
+              <button onclick="document.getElementById('pdfUploadInput').click()" class="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-[10px] font-bold transition flex items-center space-x-1 shrink-0" title="Upload Custom Land Acquisition PDF">
                 <i data-lucide="upload" class="w-3 h-3"></i>
                 <span>Upload</span>
               </button>
               <input type="file" id="pdfUploadInput" accept=".pdf" class="hidden" onchange="uploadCustomPdf(this)">
             </div>
 
-            <div class="glass-card px-3 py-1.5 rounded-full border border-white/80 shadow-md flex items-center space-x-1.5 shrink-0 text-xs">
+            <!-- Field Photo Pill -->
+            <div class="glass-card px-3 py-1.5 rounded-xl border border-white/80 shadow-md flex items-center space-x-1.5 shrink-0 text-xs">
               <label for="photoSelectDropdown" class="font-bold text-slate-700 text-[10px]">PHOTO:</label>
-              <select id="photoSelectDropdown" class="bg-transparent text-xs max-w-[180px]">
+              <select id="photoSelectDropdown" class="bg-transparent text-xs max-w-[180px] cursor-pointer">
                 <option value="">Spatially matched photo only</option>
               </select>
-              <button id="photoUploadButton" type="button" onclick="document.getElementById('photoUploadInput').click()" class="px-2 py-0.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 rounded-full text-[10px] font-bold transition flex items-center space-x-1 shrink-0" title="Upload a JPEG, PNG or WebP field photo">
+              <button id="photoUploadButton" type="button" onclick="document.getElementById('photoUploadInput').click()" class="px-2 py-0.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 rounded-lg text-[10px] font-bold transition flex items-center space-x-1 shrink-0" title="Upload a JPEG, PNG or WebP field photo">
                 <i data-lucide="upload" class="w-3 h-3"></i>
                 <span>Upload photo</span>
               </button>
               <input type="file" id="photoUploadInput" accept="image/jpeg,image/png,image/webp" aria-label="Upload field photo" class="hidden" onchange="uploadCustomPhoto(this)">
             </div>
-            <!-- Quick Suggestion Prompt Chips -->
-            <button onclick="quickPrompt('Audit Survey 1/3B against Unit 9 Gazette (36_Ex_VI_1_2025__1___1_.pdf)')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
-              <span class="text-emerald-600 font-bold">✓</span>
-              <span>Survey 1/3B (Unit 9 Gazette)</span>
-            </button>
-            <button onclick="quickPrompt('Audit Survey 84/4 against Gazette Block 1 (31Published_Gazette_Block_1.pdf)')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
-              <span class="text-emerald-600 font-bold">✓</span>
-              <span>Survey 84/4 (Block 1 Gazette)</span>
-            </button>
-            <button onclick="quickPrompt('Audit Survey 384 against Unit 9 Gazette (36_Ex_VI_1_2025__1___1_.pdf)')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0" title="Demonstrates Refuse-to-Invent policy">
-              <span class="text-rose-500 font-bold">🛡️</span>
-              <span>Survey 384 (Refuse-to-Invent)</span>
-            </button>
-            <button onclick="quickPrompt('Audit Survey 176 for extent mismatch and legal conflict')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
-              <span class="text-amber-500 font-bold">⚠</span>
-              <span>Survey 176 Conflict</span>
-            </button>
-            <button onclick="quickPrompt('Inspect Survey 384 and verify crop and growth stage')" class="glass-card hover:bg-white text-slate-700 px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/70 shadow-sm transition flex items-center space-x-1 shrink-0">
-              <span class="text-brand-600 font-bold">⚡</span>
-              <span>Inspect Survey 384</span>
-            </button>
           </div>
         </div>
 
@@ -778,9 +750,12 @@
             };
           });
 
-          document.getElementById('totalCount').innerText = allParcelsList.length;
-          document.getElementById('flaggedCount').innerText = allParcelsList.filter(p => p.badge === 'error' || p.badge === 'warning').length;
-          document.getElementById('loadedParcelsCountBadge').innerText = `${allParcelsList.length} Live`;
+          const totalCountEl = document.getElementById('totalCount');
+          if (totalCountEl) totalCountEl.innerText = allParcelsList.length;
+          const flaggedCountEl = document.getElementById('flaggedCount');
+          if (flaggedCountEl) flaggedCountEl.innerText = allParcelsList.filter(p => p.badge === 'error' || p.badge === 'warning').length;
+          const badgeEl = document.getElementById('loadedParcelsCountBadge');
+          if (badgeEl) badgeEl.innerText = `${allParcelsList.length} Live`;
 
           // Render Left Table
           renderParcelTable(allParcelsList);
@@ -864,36 +839,24 @@
       const container = document.getElementById('parcelListContainer');
       container.innerHTML = '';
 
-      const subset = parcels;
-
-      subset.forEach(p => {
+      parcels.forEach(p => {
         const isSelected = currentParcelId ? p.parcel_id === currentParcelId : p.survey_no === currentSurvey;
         const row = document.createElement('div');
         row.dataset.surveyNo = String(p.survey_no);
         row.dataset.parcelId = p.parcel_id || '';
-        row.className = `p-3 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition ${isSelected ? 'bg-brand-50/70 border-l-4 border-brand-600' : ''}`;
+        row.className = `group px-4 py-2.5 border-l-4 cursor-pointer flex items-center transition ${isSelected ? 'bg-emerald-50/80 border-emerald-600' : 'border-transparent hover:bg-slate-50'}`;
         row.onclick = () => selectParcel(p.survey_no, true, p.parcel_id);
 
-        const badgeColor = p.badge === 'error' ? 'bg-rose-100 text-rose-800' :
-                          (p.badge === 'warning' ? 'bg-amber-100 text-amber-800' :
-                          (p.badge === 'neutral' || p.status === 'Not verified' || p.status === 'Unknown' ? 'bg-slate-100 text-slate-700' : 'bg-emerald-100 text-emerald-800'));
-
         row.innerHTML = `
-          <div class="w-2/5 flex items-center space-x-2">
-            <input type="checkbox" ${isSelected ? 'checked' : ''} tabindex="-1" aria-label="Selected parcel" class="rounded text-brand-600 pointer-events-none w-3.5 h-3.5">
-            <div class="truncate">
-              <div class="font-bold text-xs text-slate-900 truncate">${p.name}</div>
-              <div class="text-[10px] text-slate-400">${p.area_acres} ac · ${escapeHtml(p.village)}</div>
-            </div>
+          <div class="w-9 shrink-0 flex items-center justify-center">
+            <input type="checkbox" ${isSelected ? 'checked' : ''} tabindex="-1" aria-label="Selected parcel" class="rounded border-slate-300 text-brand-600 pointer-events-none w-4 h-4 accent-emerald-600">
           </div>
-          <div class="w-1/4 text-xs font-medium text-slate-600 truncate">${p.crop}</div>
-          <div class="w-1/4 text-center">
-            <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeColor}">
-              ${p.status}
-            </span>
+          <div class="flex-1 min-w-0 pr-2">
+            <div class="font-bold text-xs text-slate-900 truncate tracking-tight leading-snug">${escapeHtml(p.name)}</div>
+            <div class="text-[11px] text-slate-400 font-medium truncate mt-0.5">${p.area_acres} ac &middot; ${escapeHtml(p.village)}</div>
           </div>
-          <div class="w-8 text-right text-slate-400 hover:text-slate-800">
-            <i data-lucide="chevron-right" class="w-3.5 h-3.5 inline"></i>
+          <div class="w-10 shrink-0 flex items-center justify-center text-slate-400 group-hover:text-slate-700">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
           </div>
         `;
         container.appendChild(row);
@@ -906,10 +869,11 @@
         const selected = currentParcelId
           ? row.dataset.parcelId === String(currentParcelId)
           : row.dataset.surveyNo === String(currentSurvey);
-        row.querySelector('input[type="checkbox"]').checked = selected;
-        for (const name of ['bg-brand-50/70', 'border-l-4', 'border-brand-600']) {
-          row.classList.toggle(name, selected);
-        }
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = selected;
+        row.classList.toggle('bg-emerald-50/80', selected);
+        row.classList.toggle('border-emerald-600', selected);
+        row.classList.toggle('border-transparent', !selected);
       }
     }
 
@@ -1112,8 +1076,8 @@
         parcel_id: currentParcelId,
         image_filename: document.getElementById('photoSelectDropdown').value || undefined,
         document_path: selectedDoc || undefined,
-        force_escalate: document.getElementById('simEscalate').checked,
-        simulate_conflict: document.getElementById('simConflict').checked
+        force_escalate: Boolean(document.getElementById('simEscalate')?.checked),
+        simulate_conflict: Boolean(document.getElementById('simConflict')?.checked)
       };
 
       submitAnalysis(payload)
@@ -1479,15 +1443,17 @@
     }
 
     function filterTable(type) {
-      document.getElementById('tabAll').className = type === 'all' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
-      document.getElementById('tabFlagged').className = type === 'flagged' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
-      document.getElementById('tabRedTeam').className = type === 'redteam' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
+      const tabAll = document.getElementById('tabAll');
+      if (tabAll) tabAll.className = type === 'all' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
+      const tabFlagged = document.getElementById('tabFlagged');
+      if (tabFlagged) tabFlagged.className = type === 'flagged' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
+      const tabRedTeam = document.getElementById('tabRedTeam');
+      if (tabRedTeam) tabRedTeam.className = type === 'redteam' ? "flex-1 py-1 rounded-lg bg-white shadow-xs text-slate-900 transition" : "flex-1 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition";
 
       const drawer = document.getElementById('redTeamDrawer');
-      if (type === 'redteam') {
-        drawer.classList.remove('hidden');
-      } else {
-        drawer.classList.add('hidden');
+      if (drawer) {
+        if (type === 'redteam') drawer.classList.remove('hidden');
+        else drawer.classList.add('hidden');
       }
 
       if (type === 'flagged') {
@@ -1499,8 +1465,17 @@
     }
 
     function handleSearch() {
-      const q = document.getElementById('searchInput').value.toLowerCase();
-      const filtered = allParcelsList.filter(p => p.survey_no.toLowerCase().includes(q) || p.owner.toLowerCase().includes(q));
+      const q = document.getElementById('searchInput').value.trim().toLowerCase();
+      if (!q) {
+        renderParcelTable(allParcelsList);
+        return;
+      }
+      const filtered = allParcelsList.filter(p =>
+        p.survey_no.toLowerCase().includes(q) ||
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.village && p.village.toLowerCase().includes(q)) ||
+        (p.owner && p.owner.toLowerCase().includes(q))
+      );
       renderParcelTable(filtered);
     }
 

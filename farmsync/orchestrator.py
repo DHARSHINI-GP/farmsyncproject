@@ -434,27 +434,9 @@ class FarmSyncOrchestrator:
                     pass
             if img_record and img_record.get("location_source"):
                 # User-entered coordinates are a claim, not independently verified
-                # field-photo provenance. They cannot raise parcel evidence trust
-                # UNLESS the image is associated with the correct cadastral parcel:
-                #   1. Image was tagged with the matching survey_no (set by runtime from payload), OR
-                #   2. No conflicting survey tag and the parcel is confirmed in the cadastral registry.
+                # field-photo provenance. They cannot raise parcel evidence trust.
                 vision_coordinate_containment = photo_aligned
-                img_survey = str(img_record.get("survey_no", "")).strip()
-                if img_survey:
-                    # Explicit tag: verify it matches the requested survey
-                    cadastral_confirmed = (
-                        parcel is not None
-                        and bool(target_survey)
-                        and img_survey == str(target_survey).strip()
-                    )
-                else:
-                    # No tag on image: allow when parcel is confirmed in cadastral registry
-                    cadastral_confirmed = parcel is not None and bool(target_survey)
-                if cadastral_confirmed:
-                    # Operator association confirmed against authoritative cadastral registry.
-                    photo_aligned = True
-                else:
-                    photo_aligned = False
+                photo_aligned = False
             else:
                 vision_coordinate_containment = photo_aligned
             context["img_record"] = img_record
