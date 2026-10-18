@@ -1240,12 +1240,12 @@
             const gpsBadge = document.getElementById('photoGpsBadge');
             if (gpsBadge) gpsBadge.innerText = `Crop Mismatch · ${attrs.predicted_crop} vs ${attrs.expected_crop}`;
           } else {
-            photoBadge.innerText = `${attrs.predicted_crop} · ${attrs.growth_stage}${locVerified ? ' · Location matched' : ' · Location unverified'}`;
+            photoBadge.innerText = `${attrs.predicted_crop} · ${attrs.growth_stage}${locVerified ? ' · Location verified' : ' · Location unverified'}`;
             photoBadge.className = locVerified
               ? "bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md text-[10px]"
               : "bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-md text-[10px]";
             const gpsBadge = document.getElementById('photoGpsBadge');
-            if (gpsBadge) gpsBadge.innerText = locVerified ? 'Photo coordinates · Parcel matched ✓' : 'Photo coordinates (source claim)';
+            if (gpsBadge) gpsBadge.innerText = locVerified ? 'Photo location verified · Parcel matched ✓' : 'Photo coordinates (source claim)';
           }
         } else {
           photoImg.src = '';

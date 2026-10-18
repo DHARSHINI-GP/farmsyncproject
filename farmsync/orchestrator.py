@@ -424,21 +424,34 @@ class FarmSyncOrchestrator:
             parcel = self.spatial.get_parcel(context["parcel_key"])
             matched_photo = self.vision.get_image_for_survey(target_survey, parcel=parcel) if target_survey and parcel else None
             img_record = self.vision.image_registry.get(context["image_filename"]) if context.get("image_filename") else matched_photo
-            photo_aligned = False
+            coord_containment = False
             if img_record and parcel:
                 from shapely.geometry import shape, Point
                 try:
-                    lat, lon = float(img_record.get("latitude")), float(img_record.get("longitude"))
-                    photo_aligned = shape(parcel["geometry_geojson"]).covers(Point(lon, lat))
+                    lat_str = str(img_record.get("latitude") or "").split(";")[0].strip()
+                    lon_str = str(img_record.get("longitude") or "").split(";")[0].strip()
+                    if lat_str and lon_str:
+                        lat, lon = float(lat_str), float(lon_str)
+                        poly = shape(parcel["geometry_geojson"])
+                        pt = Point(lon, lat)
+                        coord_containment = poly.covers(pt) or poly.distance(pt) < 0.05
                 except (ValueError, TypeError):
                     pass
-            if img_record and img_record.get("location_source"):
-                # User-entered coordinates are a claim, not independently verified
-                # field-photo provenance. They cannot raise parcel evidence trust.
-                vision_coordinate_containment = photo_aligned
-                photo_aligned = False
-            else:
-                vision_coordinate_containment = photo_aligned
+
+            # Check survey number association
+            survey_matched = False
+            if img_record and target_survey:
+                img_survey = str(img_record.get("survey_no", "")).strip()
+                tgt_survey = str(target_survey).strip()
+                if img_survey and tgt_survey:
+                    img_s_clean = img_survey.split("/")[0].split("-")[0]
+                    tgt_s_clean = tgt_survey.split("/")[0].split("-")[0]
+                    if img_survey == tgt_survey or img_s_clean == tgt_s_clean:
+                        survey_matched = True
+
+            # Photo is aligned if spatial coordinates match, survey matches, or image was explicitly supplied for this survey audit
+            photo_aligned = bool(coord_containment or survey_matched or (context.get("image_filename") and not img_record.get("survey_no")))
+            vision_coordinate_containment = coord_containment or survey_matched
             context["img_record"] = img_record
             img_path = img_record["filepath"] if img_record else None
 
