@@ -134,7 +134,8 @@ class AIAssistantEngine:
         system_prompt: str,
         user_message: str,
         max_tokens: int = 450,
-        temperature: float = 0.2
+        temperature: float = 0.2,
+        model_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Invokes AWS Bedrock using the modern Converse API pattern (`converse`).
@@ -143,11 +144,12 @@ class AIAssistantEngine:
         """
         if not self.bedrock_client:
             raise RuntimeError("Bedrock client is not initialized (AWS credentials required)")
+        selected_model = validate_model(model_id or self.bedrock_model_id, text_only=True)
 
         # Primary: Bedrock Converse API pattern (as described in the proposal)
         try:
             response = self.bedrock_client.converse(
-                modelId=self.bedrock_model_id,
+                modelId=selected_model,
                 messages=[
                     {
                         "role": "user",
@@ -182,17 +184,19 @@ class AIAssistantEngine:
             # by submitting the same request to a different API.
             if not isinstance(conv_err, AttributeError) and code not in ("ValidationException", "UnknownOperationException"):
                 raise
-            return self._invoke_bedrock_legacy(system_prompt, user_message, max_tokens, temperature)
+            return self._invoke_bedrock_legacy(system_prompt, user_message, max_tokens, temperature, model_id=selected_model)
 
     def _invoke_bedrock_legacy(
         self,
         system_prompt: str,
         user_message: str,
         max_tokens: int = 450,
-        temperature: float = 0.2
+        temperature: float = 0.2,
+        model_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Fallback invoke_model implementation for models or SDK versions without Converse API."""
-        if "claude" in self.bedrock_model_id:
+        selected_model = validate_model(model_id or self.bedrock_model_id, text_only=True)
+        if "claude" in selected_model:
             body = json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
                 "system": system_prompt,
@@ -200,13 +204,13 @@ class AIAssistantEngine:
                 "max_tokens": max_tokens,
                 "temperature": temperature
             })
-        elif "ministral" in self.bedrock_model_id:
+        elif "ministral" in selected_model:
             body = json.dumps({
                 "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}],
                 "max_tokens": max_tokens,
                 "temperature": temperature
             })
-        elif "mistral" in self.bedrock_model_id:
+        elif "mistral" in selected_model:
             body = json.dumps({
                 "prompt": f"<s>[INST] {system_prompt}\n\n{user_message} [/INST]",
                 "max_tokens": max_tokens,
@@ -221,7 +225,7 @@ class AIAssistantEngine:
             })
 
         response = self.bedrock_client.invoke_model(
-            modelId=self.bedrock_model_id,
+            modelId=selected_model,
             body=body,
             contentType="application/json",
             accept="application/json"
@@ -256,7 +260,8 @@ class AIAssistantEngine:
         parcel_id: Optional[str] = None,
         image_filename: Optional[str] = None,
         event_callback=None,
-        cancel_check=None
+        cancel_check=None,
+        model_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Executes end-to-end AI reasoning over the query:
@@ -266,6 +271,7 @@ class AIAssistantEngine:
         4. Structured output generation with grounding citations and honest provenance metadata
         """
         start_time = time.time()
+        selected_model = validate_model(model_id or self.bedrock_model_id, text_only=True)
 
         # Step 1: Detect Survey Number from query or use selected survey
         detected_survey = self.orchestrator.compiler.extract_survey_number(query)
@@ -357,7 +363,8 @@ class AIAssistantEngine:
                     system_prompt=system_prompt,
                     user_message=user_message,
                     max_tokens=40,
-                    temperature=0
+                    temperature=0,
+                    model_id=selected_model
                 )
                 # Free-form model prose is never published as verified findings.
                 # Only a finite focus label may influence section ordering.
@@ -369,7 +376,7 @@ class AIAssistantEngine:
                 except (ValueError, TypeError):
                     pass
                 api_pattern_used = bedrock_res["api_pattern"]
-                model_name = f"AWS Bedrock ({self.bedrock_model_id}) via {api_pattern_used}"
+                model_name = f"AWS Bedrock ({selected_model}) via {api_pattern_used}"
                 bedrock_invoked = True
                 if bedrock_res.get("prompt_tokens"):
                     prompt_tokens = bedrock_res["prompt_tokens"]
@@ -396,6 +403,7 @@ class AIAssistantEngine:
             "query": query,
             "target_survey_no": target_survey,
             "model_used": model_name,
+            "requested_model_id": selected_model,
             "bedrock_invoked": bedrock_invoked,
             "bedrock_api_pattern": api_pattern_used,
             "aws_credentials_available": self.bedrock_client is not None,

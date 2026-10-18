@@ -1,0 +1,65 @@
+{
+  "audit_date_client": "2026-10-18",
+  "deadline_client": "2026-10-19",
+  "full_offline_suite": {
+    "passed": 226,
+    "skipped_modules": 1,
+    "warnings": 1,
+    "duration_seconds": 220.61
+  },
+  "cloud_adapter_suite": {
+    "passed": 6,
+    "provider": "Moto local mocks",
+    "live_deployment_proven": false
+  },
+  "source_preflight": {
+    "python_syntax": "PASS",
+    "pinned_direct_dependencies": "PASS",
+    "deployment_assets_present": "PASS"
+  },
+  "model_evaluation": {
+    "shipped_hash_matches_report": true,
+    "held_out_images": 593,
+    "crop_accuracy": 0.8988195615514334,
+    "stage_accuracy": 0.8043844856661045,
+    "zero_test_support_crops": [
+      "Cassava",
+      "Marigold",
+      "Groundnut"
+    ],
+    "rerun_training_this_audit": false
+  },
+  "browser_fixes": [
+    "Telemetry anchor moved from GIS card to actual execution timings",
+    "Compact view selector for widths hiding desktop navigation"
+  ],
+  "acceptance": "NOT_ALL_PROMISES_VERIFIED",
+  "critical_gaps": [
+    "Live AWS session expired",
+    "Public deployment not certified; prior permission blocker",
+    "Coconut bulletin title mismatches official CPCRI TB98",
+    "Historical benchmark not current validation",
+    "FTS heuristic not calibrated probability",
+    "Primary Task 1 brief missing from supplied archive"
+  ],
+  "scope": "Passing tests are scoped evidence, not a guarantee of perfect behavior or hackathon selection.",
+  "browser_acceptance": {
+    "rows": 396,
+    "selected_row_changed_to": "381",
+    "query": "Check a 100 m waterbody buffer for Survey 384",
+    "requested_buffer_m": 100,
+    "waterbody_clearance_m": 6941.08,
+    "decision": "VERIFIED_ACCEPT",
+    "scope": "GIS supplied-layer distance rule only",
+    "telemetry_and_notification_visible": true,
+    "console_errors_in_checked_flow": 0,
+    "cloud_calls_tested_in_browser": false
+  },
+  "live_location": {
+    "user_authorized": true,
+    "geocoding": "AccessDeniedException",
+    "routing": "ExpiredTokenException",
+    "verified": false
+  },
+  "primary_task1_brief_found": false
+}

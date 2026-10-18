@@ -94,9 +94,11 @@ def test_cloud_api_sessions_jobs_and_cross_user_access(cloud):
         assert login.status_code == 200
         assert 'Secure' in login.headers['set-cookie'] and 'HttpOnly' in login.headers['set-cookie']
         assert client.get('/api/parcels').status_code == 200
-        job=client.post('/api/jobs',json={'query':'Check Survey 384'})
+        job=client.post('/api/jobs',json={'query':'Check Survey 384','model_id':'mistral.ministral-3-8b-instruct'})
         assert job.status_code == 202
         identity=job.json()['run_id']
+        assert store.run(identity,alice['id'])['request']['model_id'] == 'mistral.ministral-3-8b-instruct'
+        assert client.post('/api/jobs',json={'query':'test','model_id':'unapproved-model'}).status_code == 422
         assert delivered == [{'run_id':identity,'owner':alice['id']}]
         assert client.post('/api/jobs',json={'query':'test','document_path':'asset:not-owned'}).status_code == 404
         assert client.post('/api/jobs',json={'query':'test','simulate_conflict':True}).status_code == 400

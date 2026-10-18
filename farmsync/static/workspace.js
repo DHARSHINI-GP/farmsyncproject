@@ -150,22 +150,51 @@ async function uploadFieldPhoto(event) {
   event.preventDefault();
   const file = document.getElementById('fieldUploadFile').files[0];
   if (!file) return workspaceNotice('Choose a field photograph.');
-  const data = new FormData(); data.append('file', file);
   const latitude = document.getElementById('photoLatitude').value;
   const longitude = document.getElementById('photoLongitude').value;
+  try {
+    await saveAndSelectPhoto(file, latitude, longitude);
+    workspaceNotice('Photo saved and selected. Run Ask AI to analyze it. Coordinates are a supplied location claim.');
+  } catch (error) { workspaceNotice(error.message); }
+}
+
+async function saveAndSelectPhoto(file, latitude = '', longitude = '') {
+  const data = new FormData(); data.append('file', file);
   if (latitude) data.append('latitude', latitude);
   if (longitude) data.append('longitude', longitude);
   if (currentSurvey) data.append('survey_no', currentSurvey);
+  const result = await (await fetch('/api/images/upload', {method:'POST', body:data})).json();
+  if (!result.reference) throw new Error('Photo upload did not complete. Please try again.');
+  await loadAvailablePhotos();
+  const selector = document.getElementById('photoSelectDropdown');
+  if (![...selector.options].some(option => option.value === result.reference)) {
+    const option = document.createElement('option'); option.value = result.reference; option.textContent = result.filename; selector.append(option);
+  }
+  selector.value = result.reference;
+  addNotification(`Photo uploaded and selected: ${result.filename}`);
+  return result;
+}
+
+async function uploadCustomPhoto(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const button = document.getElementById('photoUploadButton');
+  const status = document.getElementById('photoUploadStatus');
+  status.classList.remove('hidden');
+  status.textContent = 'Uploading photo...';
+  button.disabled = true;
+  input.disabled = true;
   try {
-    const result = await (await fetch('/api/images/upload', {method:'POST', body:data})).json();
-    await loadAvailablePhotos();
-      const selector = document.getElementById('photoSelectDropdown');
-      if (![...selector.options].some(option => option.value === result.reference)) {
-        const option = document.createElement('option'); option.value = result.reference; option.textContent = result.filename; selector.append(option);
-      }
-      selector.value = result.reference;
-    workspaceNotice('Photo saved and selected. Coordinates are a supplied location claim; the app checks containment without asserting image authenticity.');
-  } catch (error) { workspaceNotice(error.message); }
+    const result = await saveAndSelectPhoto(file);
+    status.textContent = `${result.filename} uploaded and selected. Click Ask AI to analyze it. Photo location remains unverified unless checked against the parcel.`;
+  } catch (error) {
+    status.textContent = `Photo upload failed: ${error.message}`;
+    addNotification(status.textContent);
+  } finally {
+    button.disabled = false;
+    input.disabled = false;
+    input.value = '';
+  }
 }
 
 async function runBatchDocument() {

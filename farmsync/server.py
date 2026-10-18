@@ -23,7 +23,7 @@ from farmsync.ai.engine import AIAssistantEngine
 from farmsync.spatial.amazon_location import AmazonLocationServiceEngine
 from farmsync.runtime import Runtime
 from farmsync.platform_api import install as install_platform
-from farmsync.aws import check_approved_services, TEXT_MODEL, TEACHER_MODEL, EMBEDDING_MODEL, REGION
+from farmsync.aws import check_approved_services, TEXT_MODEL, TEACHER_MODEL, EMBEDDING_MODEL, REGION, TextModelId
 
 app = FastAPI(title="FARMSYNC Enterprise Platform", version="2.0.0")
 
@@ -220,6 +220,7 @@ class OrchestrateRequest(BaseModel):
     simulate_ood: Optional[bool] = False
 
 class AIQueryRequest(BaseModel):
+    model_id: Optional[TextModelId] = None
     query: str = Field(min_length=1, max_length=8000)
     survey_no: Optional[str] = None
     parcel_id: Optional[str] = None

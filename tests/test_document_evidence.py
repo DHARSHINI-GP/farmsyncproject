@@ -44,6 +44,11 @@ def test_missing_owner_never_borrowed_from_registry(monkeypatch, tmp_path):
     assert result["ocr_confidence"] is None
     assert result["field_status"]["owner"] == "MISSING"
     assert len(result["source_sha256"]) == 64
+    import json
+    saved = json.loads(json.dumps(result))
+    assert saved["observations"][0]["survey_no"] == "384"
+    assert "observations" not in saved["observations"][0]
+    assert result is not result["observations"][0]
 
 
 def test_missing_extent_and_unknown_units_stay_null(monkeypatch, tmp_path):

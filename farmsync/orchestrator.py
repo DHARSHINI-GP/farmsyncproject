@@ -410,6 +410,10 @@ class FarmSyncOrchestrator:
                 simulate_ood=context["simulate_unsupported_crop"],
                 force_escalate=is_forced
             )
+            # Inference sees a disk filename; previews need the owned asset
+            # reference (or indexed library filename) used to authorize access.
+            if img_record:
+                vision_result["image_filename"] = img_record["filename"]
             vision_result["photo_association_verified"] = photo_aligned
             vision_result["coordinate_containment"] = vision_coordinate_containment
             vision_result["location_source"] = (img_record or {}).get("location_source", "provided dataset metadata")
@@ -439,6 +443,7 @@ class FarmSyncOrchestrator:
                         simulate_ood=context["simulate_unsupported_crop"],
                         force_escalate=True
                     )
+                    vision_result["image_filename"] = img_record["filename"]
                     vision_result["photo_association_verified"] = bool((context.get("vision_result") or {}).get("photo_association_verified"))
                     context["vision_result"] = vision_result
                 escalation_decision = "ESCALATED_TO_TEACHER"

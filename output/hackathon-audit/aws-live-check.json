@@ -1,0 +1,27 @@
+{
+  "checked_at_utc": "2026-10-18T00:08:40.029917+00:00",
+  "region": "ap-south-1",
+  "checks": {
+    "credentials": {
+      "status": "FAIL",
+      "error_code": "ExpiredToken"
+    },
+    "text_3b": {
+      "status": "NOT_RUN",
+      "reason": "Credentials must pass first"
+    },
+    "vision_8b": {
+      "status": "NOT_RUN",
+      "reason": "Credentials must pass first"
+    },
+    "text_embeddings": {
+      "status": "NOT_RUN",
+      "reason": "Credentials must pass first"
+    },
+    "multimodal_embeddings": {
+      "status": "NOT_RUN",
+      "reason": "Credentials must pass first"
+    }
+  },
+  "all_passed": false
+}

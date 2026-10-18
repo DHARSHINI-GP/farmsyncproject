@@ -78,6 +78,41 @@ def test_real_image_upload_and_asset_archival(platform):
     assert client.post(f"/api/assets/{asset['asset_id']}/restore").status_code == 200
 
 
+@pytest.mark.parametrize("force_escalate", [False, True])
+def test_uploaded_photo_preview_reference_survives_analysis(platform, monkeypatch, force_escalate):
+    client, *_ = platform
+    sign_in(client)
+    output = BytesIO()
+    Image.new("RGB", (32, 32), "green").save(output, "PNG")
+    asset = client.post("/api/images/upload", files={"file": ("field.png", output.getvalue(), "image/png")}).json()
+
+    def predict(path, **kwargs):
+        # Inference returns the disk basename, not an authorized asset reference.
+        from pathlib import Path
+        return {"has_image": True, "image_filename": Path(path).name,
+                "predicted_crop": "Coconut", "predicted_stage": "full_growth",
+                "final_verified_crop": "Coconut", "final_verified_stage": "full_growth",
+                "confidence": 0.99, "final_confidence": 0.99,
+                "shannon_entropy": 0.01, "student_model": "test model",
+                "escalated_to_teacher": False, "is_out_of_distribution": False}
+
+    monkeypatch.setattr(runtime.orchestrator.vision, "predict_crop", predict)
+    response = client.post("/api/orchestrate", json={
+        "query": "Inspect Survey 384 crop and land evidence", "survey_no": "384",
+        "image_filename": asset["reference"], "force_escalate": force_escalate})
+    assert response.status_code == 200, response.text
+    evidence = response.json()["verified_result_object"]["source_evidence"]
+    photo = next(item for item in evidence if item["source_type"] == "FIELD_PHOTOGRAPH")
+    assert photo["source_ref"] == asset["reference"]
+    assert photo["parcel_location_verified"] is False
+    preview = client.get("/api/image/" + photo["source_ref"])
+    assert preview.status_code == 200
+    assert preview.headers["content-type"] == "image/jpeg"
+    client.post("/api/auth/logout")
+    sign_in(client, "bob")
+    assert client.get("/api/image/" + photo["source_ref"]).status_code == 404
+
+
 def test_admin_actions_reviewer_permissions_and_production_gate(platform, monkeypatch):
     client, *_ = platform
     sign_in(client)
@@ -95,11 +130,12 @@ def test_admin_actions_reviewer_permissions_and_production_gate(platform, monkey
 def test_jobs_stream_progress_save_history_and_export(platform, monkeypatch):
     client, *_ = platform
     def process_query(**kwargs):
+        assert kwargs["model_id"] == "mistral.ministral-3-8b-instruct"
         kwargs["event_callback"]({"task_id": "test", "status": "RUNNING"})
         return {"answer": "Only source facts", "verified_result_object": {"trust_metrics": {"verification_status": "VERIFIED_ABSTAIN"}}, "tokens": {"total_tokens": 7}}
     monkeypatch.setattr(runtime.ai, "process_query", process_query)
     sign_in(client)
-    response = client.post("/api/jobs", json={"query": "Inspect Survey 384"})
+    response = client.post("/api/jobs", json={"query": "Inspect Survey 384", "model_id": "mistral.ministral-3-8b-instruct"})
     assert response.status_code == 202
     run_id = response.json()["run_id"]
     with client.stream("GET", f"/api/jobs/{run_id}/events") as stream:
@@ -111,6 +147,19 @@ def test_jobs_stream_progress_save_history_and_export(platform, monkeypatch):
     client.post("/api/auth/logout")
     sign_in(client, "bob")
     assert client.get(f"/api/runs/{run_id}").status_code == 404
+
+
+def test_ai_request_validates_and_passes_model_selection(platform, monkeypatch):
+    client, *_ = platform
+    sign_in(client)
+    selected = "mistral.ministral-3-8b-instruct"
+    def process_query(**kwargs):
+        assert kwargs["model_id"] == selected
+        return {"answer": "Test response", "verified_result_object": {"trust_metrics": {"verification_status": "VERIFIED_ABSTAIN"}}}
+    monkeypatch.setattr(runtime.ai, "process_query", process_query)
+    assert client.post("/api/ai/query", json={"query": "Inspect Survey 384", "model_id": selected}).status_code == 200
+    for endpoint in ("/api/ai/query", "/api/jobs"):
+        assert client.post(endpoint, json={"query": "Inspect Survey 384", "model_id": "unapproved-model"}).status_code == 422
 
 
 def test_batch_compares_explicit_source_claims(platform):

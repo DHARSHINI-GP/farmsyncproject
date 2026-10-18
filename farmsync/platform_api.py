@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, SecretStr
+from farmsync.aws import TextModelId
 
 
 class LoginInput(BaseModel):
@@ -20,6 +21,7 @@ class UserInput(LoginInput):
 
 
 class JobInput(BaseModel):
+    model_id: TextModelId | None = None
     query: str = Field(min_length=1, max_length=8000)
     survey_no: str | None = None
     parcel_id: str | None = None

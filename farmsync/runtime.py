@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 import io
 import json
+import logging
 import os
 from pathlib import Path
 import threading
@@ -142,7 +143,7 @@ class Runtime:
             if record:
                 self.orchestrator.vision.image_registry[record["filename"]] = record
             if ai:
-                kwargs = {k: payload.get(k) for k in ("query", "survey_no", "document_path", "force_escalate", "simulate_conflict", "parcel_id", "image_filename")}
+                kwargs = {k: payload.get(k) for k in ("query", "survey_no", "document_path", "force_escalate", "simulate_conflict", "parcel_id", "image_filename", "model_id")}
                 result = self.ai.process_query(**kwargs, event_callback=progress, cancel_check=check_cancel)
             else:
                 kwargs = {k: payload.get(k) for k in ("query", "survey_no", "document_path", "simulate_conflict", "parcel_id", "image_filename")}
@@ -165,6 +166,7 @@ class Runtime:
                 self.store.create_review(run_id, user["id"])
             return result
         except Exception as exc:
+            logging.getLogger(__name__).exception("Analysis failed for run %s", run_id)
             code = str(exc) if str(exc) in {"REQUEST_CANCELLED", "REQUEST_DEADLINE_EXCEEDED"} else type(exc).__name__
             status = "CANCELLED" if code == "REQUEST_CANCELLED" else "FAILED"
             self.store.update_run(run_id, status, error=code)

@@ -510,7 +510,9 @@ class DocumentRegistryEngine:
                     "extracted_owner": None, "claimed_extent_acres": None,
                     "status": "AMBIGUOUS_DOCUMENT_ROWS", "observations": matches,
                     "error": "Multiple different claims require village/subdivision identification or human review."}
-        result = matches[0]
+        # The envelope must be distinct from its source observations. Otherwise
+        # observations[0] points back to result and durable JSON export fails.
+        result = deepcopy(matches[0])
         result["notices"] = notices
         result["observations"] = matches
         if simulate_mismatch:

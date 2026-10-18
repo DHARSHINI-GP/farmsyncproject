@@ -66,6 +66,31 @@ def test_selected_model_updates_runtime(monkeypatch):
     assert eng.bedrock_model_id == "mistral.ministral-3-8b-instruct"
 
 
+def test_request_model_is_isolated_and_preserved_in_legacy_fallback():
+    eng = engine()
+    default_model = eng.bedrock_model_id
+    selected = "mistral.ministral-3-8b-instruct"
+    eng.bedrock_client.converse.return_value = {"output": {"message": {"content": [{"text": "OK"}]}}}
+    eng._invoke_bedrock_converse("system", "question", model_id=selected)
+    assert eng.bedrock_client.converse.call_args.kwargs["modelId"] == selected
+    assert eng.bedrock_model_id == default_model
+    eng._invoke_bedrock_converse("system", "question")
+    assert eng.bedrock_client.converse.call_args.kwargs["modelId"] == default_model
+
+    eng.bedrock_client.converse.side_effect = ClientError({"Error": {"Code": "ValidationException"}}, "Converse")
+    eng.bedrock_client.invoke_model.return_value = {"body": BytesIO(json.dumps({"choices": [{"message": {"content": "OK"}}]}).encode())}
+    eng._invoke_bedrock_converse("system", "question", model_id=selected)
+    assert eng.bedrock_client.invoke_model.call_args.kwargs["modelId"] == selected
+    assert eng.bedrock_model_id == default_model
+
+
+def test_unapproved_request_model_is_rejected_before_inference():
+    eng = engine()
+    with pytest.raises(ValueError, match="approved"):
+        eng._invoke_bedrock_converse("system", "question", model_id="unapproved-model")
+    eng.bedrock_client.converse.assert_not_called()
+
+
 def test_location_client_construction_is_not_connectivity():
     eng = AmazonLocationServiceEngine.__new__(AmazonLocationServiceEngine)
     eng.client = MagicMock()

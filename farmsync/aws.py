@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import ssl
 import tempfile
+from typing import Literal
 
 import boto3
 from botocore.config import Config
@@ -17,6 +18,7 @@ from botocore.httpsession import get_cert_path
 
 REGION = "ap-south-1"
 TEXT_MODEL = "mistral.ministral-3-3b-instruct"
+TextModelId = Literal["mistral.ministral-3-3b-instruct", "mistral.ministral-3-8b-instruct"]
 TEACHER_MODEL = "mistral.ministral-3-8b-instruct"
 EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
 MULTIMODAL_EMBEDDING_MODEL = "amazon.titan-embed-image-v1"
